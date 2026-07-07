@@ -82,6 +82,27 @@ public final class CliContext {
         return apiClient().getObjectMapper().convertValue(fields, type);
     }
 
+    /**
+     * Places {@code value} into a (possibly nested) map following a dotted path, creating
+     * intermediate maps as needed. E.g. {@code putPath(m, "customer.address.city", "NYC")}
+     * yields {@code {"customer":{"address":{"city":"NYC"}}}}. The assembled tree is handed
+     * to {@link #convert} so Jackson can bind it to the request-body model.
+     */
+    @SuppressWarnings("unchecked")
+    public static void putPath(java.util.Map<String, Object> root, String dottedPath, Object value) {
+        String[] parts = dottedPath.split("\\.");
+        java.util.Map<String, Object> node = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            Object child = node.get(parts[i]);
+            if (!(child instanceof java.util.Map)) {
+                child = new java.util.LinkedHashMap<String, Object>();
+                node.put(parts[i], child);
+            }
+            node = (java.util.Map<String, Object>) child;
+        }
+        node.put(parts[parts.length - 1], value);
+    }
+
     public static String baseUrl() {
         return baseUrl;
     }

@@ -3,11 +3,16 @@
  * Do NOT edit -- rewritten on every build. One picocli command per operation
  * tagged "cli" in the OpenAPI spec.
  *
+ * Request-body models are flattened (recursively) into one option per leaf field by the
+ * cli-java generator, which supplies the x-cli-fields vendor extension.
+ *
  * Register the nested command classes on your picocli root command in
  * com.petstore.cli.PetstoreCli.
  */
 package com.petstore.cli.command;
 
+import java.math.*;
+import java.time.*;
 import java.util.List;
 import java.util.concurrent.Callable;
 
@@ -44,48 +49,20 @@ public final class GeneratedCliCommands {
 {{/isFile}}
 {{^isFile}}
 {{#isBodyParam}}
-{{! Object-model body: expose one option per field. }}
+{{! Object-model body: one option per (recursively) flattened leaf field. }}
 {{#isModel}}
-{{#vars}}
-{{#isEnum}}
-        @Option(names = "--{{name}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
-                description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}}{{#allowableValues}} (allowed: {{#values}}{{.}} {{/values}}){{/allowableValues}}{{#required}} (required){{/required}}")
-        private String {{name}};
-{{/isEnum}}
-{{^isEnum}}
-{{#isContainer}}
-{{#isArray}}
-{{#items.isModel}}
-        @Option(names = "--{{name}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
-                description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}} (JSON array of {{items.dataType}}; use @path for a file){{#required}} (required){{/required}}")
-        private String {{name}}Json;
-{{/items.isModel}}
-{{^items.isModel}}
-        @Option(names = "--{{name}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
-                description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}}{{#required}} (required){{/required}}")
-        private {{{datatypeWithEnum}}} {{name}};
-{{/items.isModel}}
-{{/isArray}}
-{{^isArray}}
-        @Option(names = "--{{name}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
-                description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}} (JSON for {{dataType}}; use @path for a file){{#required}} (required){{/required}}")
-        private String {{name}}Json;
-{{/isArray}}
-{{/isContainer}}
-{{^isContainer}}
-{{#isModel}}
-        @Option(names = "--{{name}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
-                description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}} (JSON for {{dataType}}; use @path for a file){{#required}} (required){{/required}}")
-        private String {{name}}Json;
-{{/isModel}}
-{{^isModel}}
-        @Option(names = "--{{name}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
-                description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}}{{#required}} (required){{/required}}")
-        private {{{datatypeWithEnum}}} {{name}};
-{{/isModel}}
-{{/isContainer}}
-{{/isEnum}}
-{{/vars}}
+{{#vendorExtensions}}{{#x-cli-fields}}
+{{#isJson}}
+        @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
+                description = "{{#description}}{{description}} {{/description}}(JSON for {{jsonType}}; use @path for a file){{#required}} (required){{/required}}")
+        private String {{fieldName}}Json;
+{{/isJson}}
+{{^isJson}}
+        @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
+                description = "{{#description}}{{description}}{{/description}}{{^description}}{{optionName}}{{/description}}{{#allowed}} (allowed: {{allowed}}){{/allowed}}{{#required}} (required){{/required}}")
+        private {{{dataType}}} {{fieldName}};
+{{/isJson}}
+{{/x-cli-fields}}{{/vendorExtensions}}
 {{/isModel}}
 {{! Non-object body (array / map / primitive): one JSON option. }}
 {{^isModel}}
@@ -108,37 +85,14 @@ public final class GeneratedCliCommands {
 {{#allParams}}{{#isBodyParam}}
 {{#isModel}}
                 java.util.Map<String, Object> {{paramName}}Fields = new java.util.LinkedHashMap<>();
-{{#vars}}
-{{#isEnum}}
-                if ({{name}} != null) {{paramName}}Fields.put("{{baseName}}", {{name}});
-{{/isEnum}}
-{{^isEnum}}
-{{#isContainer}}
-{{#isArray}}
-{{#items.isModel}}
-                {{{dataType}}} {{name}} = CliContext.parseJson({{name}}Json, new TypeReference<{{{dataType}}}>() {});
-                if ({{name}} != null) {{paramName}}Fields.put("{{baseName}}", {{name}});
-{{/items.isModel}}
-{{^items.isModel}}
-                if ({{name}} != null) {{paramName}}Fields.put("{{baseName}}", {{name}});
-{{/items.isModel}}
-{{/isArray}}
-{{^isArray}}
-                {{{dataType}}} {{name}} = CliContext.parseJson({{name}}Json, new TypeReference<{{{dataType}}}>() {});
-                if ({{name}} != null) {{paramName}}Fields.put("{{baseName}}", {{name}});
-{{/isArray}}
-{{/isContainer}}
-{{^isContainer}}
-{{#isModel}}
-                {{{dataType}}} {{name}} = CliContext.parseJson({{name}}Json, new TypeReference<{{{dataType}}}>() {});
-                if ({{name}} != null) {{paramName}}Fields.put("{{baseName}}", {{name}});
-{{/isModel}}
-{{^isModel}}
-                if ({{name}} != null) {{paramName}}Fields.put("{{baseName}}", {{name}});
-{{/isModel}}
-{{/isContainer}}
-{{/isEnum}}
-{{/vars}}
+{{#vendorExtensions}}{{#x-cli-fields}}
+{{#isJson}}
+                if ({{fieldName}}Json != null) CliContext.putPath({{paramName}}Fields, "{{path}}", CliContext.parseJson({{fieldName}}Json, new TypeReference<Object>() {}));
+{{/isJson}}
+{{^isJson}}
+                if ({{fieldName}} != null) CliContext.putPath({{paramName}}Fields, "{{path}}", {{fieldName}});
+{{/isJson}}
+{{/x-cli-fields}}{{/vendorExtensions}}
                 {{{dataType}}} {{paramName}} = CliContext.convert({{paramName}}Fields, new TypeReference<{{{dataType}}}>() {});
 {{/isModel}}
 {{^isModel}}

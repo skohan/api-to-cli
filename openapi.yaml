@@ -286,6 +286,29 @@ paths:
       x-tags:
       - tag: pet
       x-contentType: multipart/form-data
+  /customer/order:
+    post:
+      tags:
+      - store
+      - cli
+      summary: Create a customer order (demonstrates a deeply nested request body)
+      operationId: createCustomerOrder
+      requestBody:
+        description: A customer order whose body nests Customer, which nests Address
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerOrder'
+        required: true
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerOrder'
+      x-accepts: application/json
+      x-contentType: application/json
   /store/inventory:
     get:
       tags:
@@ -791,6 +814,44 @@ components:
           type: string
           description: file to upload
           format: binary
+    Address:
+      type: object
+      description: A postal address
+      properties:
+        street:
+          type: string
+          description: Street including house number
+        city:
+          type: string
+          description: City name
+        zipCode:
+          type: string
+          description: Postal / ZIP code
+    Customer:
+      type: object
+      description: A customer, containing a nested Address
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          description: Full name of the customer
+        address:
+          $ref: '#/components/schemas/Address'
+    CustomerOrder:
+      type: object
+      description: An order placed by a customer; nests Customer, which nests Address
+      properties:
+        orderId:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int32
+          description: Number of items ordered
+        customer:
+          $ref: '#/components/schemas/Customer'
   requestBodies:
     UserArray:
       description: List of user object
