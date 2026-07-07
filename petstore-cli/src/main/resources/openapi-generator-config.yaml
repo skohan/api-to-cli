@@ -1,0 +1,8 @@
+# Registers the custom CLI-command template as an additional generated file.
+# openapi-generator emits one GeneratedCliCommands.java (a SupportingFile, so it has
+# access to every operation) in addition to the normal client (models + CliApi).
+files:
+  cli_commands.mustache:
+    templateType: SupportingFiles
+    destinationFilename: GeneratedCliCommands.java
+    folder: src/main/java/com/petstore/cli/command
