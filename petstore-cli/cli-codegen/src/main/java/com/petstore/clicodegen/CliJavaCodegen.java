@@ -112,6 +112,11 @@ public class CliJavaCodegen extends JavaClientCodegen {
             CodegenModel nested = (property.isModel && !property.isContainer)
                     ? models.get(property.complexType)
                     : null;
+            // A $ref to a standalone enum schema resolves to a CodegenModel that IS the
+            // enum (no vars). Never recurse into it -- treat the property as an enum leaf.
+            if (nested != null && nested.isEnum) {
+                nested = null;
+            }
 
             if (nested != null && !visiting.contains(nested.classname)) {
                 visiting.push(nested.classname);
@@ -121,10 +126,29 @@ public class CliJavaCodegen extends JavaClientCodegen {
             }
 
             boolean listOfModels = property.isContainer
-                    && property.items != null && property.items.isModel;
+                    && property.items != null && property.items.isModel && !property.items.isEnum;
             boolean unflattenable = listOfModels || property.isMap
                     || (property.isModel && property.isContainer)
-                    || (property.isModel && nested == null); // free-form / cyclic object
+                    || (property.isModel && !property.isEnum && nested == null); // free-form / cyclic object
+
+            // Whether the value is enum-typed in the model. Depending on the generator
+            // version, a List of inline enums may report isEnum on the property itself,
+            // only on items, or neither -- cover all of them so the CLI option is always
+            // String-based (Jackson coerces to the enum at assembly time). Otherwise the
+            // generated field would reference a model's inner enum type, which does not
+            // resolve (and does not parse from the command line) in GeneratedCliCommands.
+            boolean scalarEnum = property.isEnum && !property.isContainer;
+            boolean listOfEnums = property.isContainer
+                    && (property.isEnum || (property.items != null && property.items.isEnum));
+
+            String cliType;
+            if (unflattenable || scalarEnum) {
+                cliType = "String";
+            } else if (listOfEnums) {
+                cliType = "java.util.List<String>";
+            } else {
+                cliType = property.datatypeWithEnum;
+            }
 
             Map<String, Object> leaf = new LinkedHashMap<>();
             leaf.put("optionName", path);
@@ -135,10 +159,13 @@ public class CliJavaCodegen extends JavaClientCodegen {
             leaf.put("description", property.description == null ? "" : property.description);
             leaf.put("isEnum", property.isEnum);
             leaf.put("isJson", unflattenable);
-            leaf.put("dataType", (property.isEnum || unflattenable) ? "String" : property.datatypeWithEnum);
+            leaf.put("dataType", cliType);
             leaf.put("jsonType", property.dataType);
-            if (property.isEnum && property.allowableValues != null) {
-                Object values = property.allowableValues.get("values");
+            Map<String, Object> allowableValues = property.allowableValues != null
+                    ? property.allowableValues
+                    : (property.items != null ? property.items.allowableValues : null);
+            if ((scalarEnum || listOfEnums) && allowableValues != null) {
+                Object values = allowableValues.get("values");
                 if (values != null) {
                     leaf.put("allowed", String.valueOf(values));
                 }
