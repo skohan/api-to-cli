@@ -1,4 +1,4 @@
-package com.petstore.cli.codegen;
+package com.petstore.clicodegen;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -28,10 +28,6 @@ import org.openapitools.codegen.model.OperationsMap;
  * Recursion descends into single nested object models only. Values that cannot map to a
  * fixed set of options -- arrays of models, maps, free-form objects -- remain a single
  * JSON option. Reference cycles are broken via a visited stack.
- *
- * BUILD-TIME ONLY: this package is compiled early by a dedicated compiler execution and
- * run by {@link GenerateCli} during generate-sources. It is excluded from the shaded CLI
- * jar, and its openapi-generator dependency is 'provided' so nothing leaks into runtime.
  */
 public class CliJavaCodegen extends JavaClientCodegen {
 

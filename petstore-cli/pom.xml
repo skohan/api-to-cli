@@ -19,18 +19,6 @@
       <artifactId>picocli</artifactId>
     </dependency>
 
-    <!--
-      Build-time only: compiled against by com.petstore.cli.codegen (the custom generator
-      + its bootstrap), which runs during generate-sources. 'provided' keeps it and its
-      transitive dependencies out of the shaded runtime jar.
-    -->
-    <dependency>
-      <groupId>org.openapitools</groupId>
-      <artifactId>openapi-generator</artifactId>
-      <version>${openapi-generator.version}</version>
-      <scope>provided</scope>
-    </dependency>
-
     <!-- Runtime dependencies of the generated 'java' + 'native' client. -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -71,78 +59,48 @@
 
   <build>
     <plugins>
-      <!--
-        Code generation happens in three steps bound to generate-sources, executed in the
-        declaration order below:
-          1. compiler: compile ONLY com.petstore.cli.codegen (no generated code needed yet)
-          2. exec:     fork a JVM running GenerateCli, which drives openapi-generator with
-                       the custom CliJavaCodegen (named by FQCN, so no ServiceLoader file)
-          3. build-helper: register the generated sources with the compile source roots
-        The rest of the module then compiles normally, including the generated code.
-      -->
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>compile-cli-codegen</id>
-            <phase>generate-sources</phase>
-            <goals>
-              <goal>compile</goal>
-            </goals>
-            <configuration>
-              <includes>
-                <include>com/petstore/cli/codegen/**</include>
-              </includes>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>3.4.1</version>
+        <groupId>org.openapitools</groupId>
+        <artifactId>openapi-generator-maven-plugin</artifactId>
+        <version>${openapi-generator.version}</version>
+        <dependencies>
+          <!-- Puts our custom generator (cli-java) on the plugin's classpath; it is
+               discovered through its META-INF/services registration. -->
+          <dependency>
+            <groupId>com.petstore</groupId>
+            <artifactId>cli-codegen</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+        </dependencies>
         <executions>
           <execution>
             <id>generate-cli-client</id>
             <phase>generate-sources</phase>
             <goals>
-              <goal>exec</goal>
+              <goal>generate</goal>
             </goals>
             <configuration>
-              <executable>java</executable>
-              <!-- compile scope so the 'provided' openapi-generator is on the classpath -->
-              <classpathScope>compile</classpathScope>
-              <arguments>
-                <argument>-classpath</argument>
-                <classpath/>
-                <argument>com.petstore.cli.codegen.GenerateCli</argument>
-                <!-- All generator settings live in this file; the pom contributes only
-                     the output directory, since Maven owns the target/ layout. -->
-                <argument>${project.basedir}/src/main/resources/openapi-generator-config.yaml</argument>
-                <argument>${project.build.directory}/generated-sources/openapi</argument>
-              </arguments>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>build-helper-maven-plugin</artifactId>
-        <version>3.6.0</version>
-        <executions>
-          <execution>
-            <id>add-generated-sources</id>
-            <phase>generate-sources</phase>
-            <goals>
-              <goal>add-source</goal>
-            </goals>
-            <configuration>
-              <sources>
-                <source>${project.build.directory}/generated-sources/openapi/src/main/java</source>
-              </sources>
+              <inputSpec>${project.basedir}/../openapi.yaml</inputSpec>
+              <generatorName>cli-java</generatorName>
+              <library>native</library>
+              <output>${project.build.directory}/generated-sources/openapi</output>
+              <apiPackage>com.petstore.cli.generated.api</apiPackage>
+              <modelPackage>com.petstore.cli.generated.model</modelPackage>
+              <invokerPackage>com.petstore.cli.generated</invokerPackage>
+              <generateApiTests>false</generateApiTests>
+              <generateModelTests>false</generateModelTests>
+              <generateApiDocumentation>false</generateApiDocumentation>
+              <generateModelDocumentation>false</generateModelDocumentation>
+              <apisToGenerate>Cli</apisToGenerate>
+              <templateDirectory>${project.basedir}/src/main/resources/openapi-templates</templateDirectory>
+              <configurationFile>${project.basedir}/src/main/resources/openapi-generator-config.yaml</configurationFile>
+              <configOptions>
+                <sourceFolder>src/main/java</sourceFolder>
+                <dateLibrary>java8</dateLibrary>
+                <serializationLibrary>jackson</serializationLibrary>
+                <hideGenerationTimestamp>true</hideGenerationTimestamp>
+                <useJakartaEe>true</useJakartaEe>
+              </configOptions>
             </configuration>
           </execution>
         </executions>
@@ -165,16 +123,6 @@
                   <mainClass>com.petstore.cli.PetstoreCli</mainClass>
                 </transformer>
               </transformers>
-              <filters>
-                <!-- Build-time codegen classes have no place in the runtime CLI jar
-                     (they reference the 'provided' openapi-generator, absent at runtime). -->
-                <filter>
-                  <artifact>com.petstore:petstore-cli</artifact>
-                  <excludes>
-                    <exclude>com/petstore/cli/codegen/**</exclude>
-                  </excludes>
-                </filter>
-              </filters>
             </configuration>
           </execution>
         </executions>

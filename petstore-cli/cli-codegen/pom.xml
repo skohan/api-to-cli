@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.petstore</groupId>
+    <artifactId>petstore-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <!-- This module lives nested under petstore-cli/, so the parent pom is two levels up. -->
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>cli-codegen</artifactId>
+  <packaging>jar</packaging>
+
+  <description>
+    Custom openapi-generator ("cli-java") extending the stock 'java' client generator.
+    It recursively expands each request-body model into a flat list of leaf fields
+    (dotted paths such as customer.address.street) exposed to templates via the
+    x-cli-fields vendor extension, so the CLI offers one option per nested field.
+    Registered for discovery through META-INF/services and consumed by petstore-cli
+    as a dependency of the openapi-generator-maven-plugin.
+  </description>
+
+  <dependencies>
+    <!--
+      Provided: the openapi-generator-maven-plugin already carries this at execution time.
+      We only need it to compile against; bundling it would duplicate/clash on the plugin
+      classpath.
+    -->
+    <dependency>
+      <groupId>org.openapitools</groupId>
+      <artifactId>openapi-generator</artifactId>
+      <version>${openapi-generator.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+</project>

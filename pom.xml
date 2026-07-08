@@ -11,6 +11,7 @@
 
   <modules>
     <module>petstore-app</module>
+    <module>petstore-cli/cli-codegen</module>
     <module>petstore-cli</module>
   </modules>
 

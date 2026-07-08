@@ -1,37 +1,8 @@
-# Single source of truth for CLI code generation, consumed by
-# com.petstore.cli.codegen.GenerateCli via CodegenConfigurator.fromFile(...).
-# Relative paths resolve against the petstore-cli module directory (the working
-# directory of the forked generator JVM). The output directory is the one thing
-# supplied by the pom, because Maven owns target/ layout.
-
-generatorName: com.petstore.cli.codegen.CliJavaCodegen
-inputSpec: ../openapi.yaml
-templateDir: src/main/resources/openapi-templates
-library: native
-apiPackage: com.petstore.cli.generated.api
-modelPackage: com.petstore.cli.generated.model
-invokerPackage: com.petstore.cli.generated
-
-# Selective generation: only the API class grouped under the "cli" tag, all models,
-# all supporting files; no tests or docs.
-globalProperties:
-  apis: Cli
-  models: ""
-  supportingFiles: ""
-  apiTests: "false"
-  modelTests: "false"
-  apiDocs: "false"
-  modelDocs: "false"
-
-# Unrecognized top-level keys are passed to the generator as additional properties.
-sourceFolder: src/main/java
-dateLibrary: java8
-serializationLibrary: jackson
-hideGenerationTimestamp: true
-useJakartaEe: true
-
 # Registers the custom CLI-command template as an additional generated file.
-# It is a SupportingFile so it has access to every operation.
+# openapi-generator emits one GeneratedCliCommands.java (a SupportingFile, so it has
+# access to every operation) in addition to the normal client (models + CliApi).
+# All other generator settings live in the openapi-generator-maven-plugin
+# configuration in petstore-cli/pom.xml.
 files:
   cli_commands.mustache:
     templateType: SupportingFiles
