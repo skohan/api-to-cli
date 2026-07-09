@@ -2,12 +2,18 @@ package com.petstore.clicodegen;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.media.Schema;
 import org.openapitools.codegen.CodegenModel;
 import org.openapitools.codegen.CodegenOperation;
 import org.openapitools.codegen.CodegenParameter;
@@ -45,6 +51,59 @@ public class CliJavaCodegen extends JavaClientCodegen {
     @Override
     public String getHelp() {
         return "Java client generator that also flattens request-body models into per-field CLI options.";
+    }
+
+    /**
+     * Strips {@code uniqueItems: true} from every array schema before code generation, so
+     * arrays become {@code List} rather than {@code Set}. This sidesteps an upstream bug in
+     * the stock model template: the {@code Set} branch of {@code toUrlQueryString()} declares
+     * its loop variable as {@code String} regardless of the element type, which fails to
+     * compile for arrays of enums (and mis-numbers the index). The {@code List} branch is
+     * index-based and correct. Uniqueness is still enforced by the server; the client model
+     * simply does not deduplicate -- an acceptable trade for a CLI that sends JSON bodies.
+     */
+    @Override
+    public void preprocessOpenAPI(OpenAPI openAPI) {
+        super.preprocessOpenAPI(openAPI);
+        if (openAPI.getComponents() != null && openAPI.getComponents().getSchemas() != null) {
+            Set<Schema> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+            for (Schema<?> schema : openAPI.getComponents().getSchemas().values()) {
+                clearUniqueItems(schema, visited);
+            }
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private void clearUniqueItems(Schema schema, Set<Schema> visited) {
+        if (schema == null || !visited.add(schema)) {
+            return;
+        }
+        if (Boolean.TRUE.equals(schema.getUniqueItems())) {
+            schema.setUniqueItems(null);
+        }
+        clearUniqueItems(schema.getItems(), visited);
+        if (schema.getProperties() != null) {
+            for (Object value : schema.getProperties().values()) {
+                if (value instanceof Schema) {
+                    clearUniqueItems((Schema) value, visited);
+                }
+            }
+        }
+        if (schema.getAdditionalProperties() instanceof Schema) {
+            clearUniqueItems((Schema) schema.getAdditionalProperties(), visited);
+        }
+        clearUniqueItemsAll(schema.getAllOf(), visited);
+        clearUniqueItemsAll(schema.getAnyOf(), visited);
+        clearUniqueItemsAll(schema.getOneOf(), visited);
+    }
+
+    @SuppressWarnings("rawtypes")
+    private void clearUniqueItemsAll(Collection<Schema> schemas, Set<Schema> visited) {
+        if (schemas != null) {
+            for (Schema s : schemas) {
+                clearUniqueItems(s, visited);
+            }
+        }
     }
 
     @Override
