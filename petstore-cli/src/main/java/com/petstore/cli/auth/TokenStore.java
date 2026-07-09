@@ -9,12 +9,12 @@ import java.util.Optional;
 /**
  * Persists the bearer token (service ticket) obtained by the {@code login} command so that
  * subsequent CLI invocations can authenticate without logging in again. Stored as a single
- * file under {@code ~/.petstore-cli/token}.
+ * file under {@code ./.petstore-cli/token} (relative to the current working directory).
  */
 public final class TokenStore {
 
     private static final Path TOKEN_FILE =
-            Path.of(System.getProperty("user.home"), ".petstore-cli", "token");
+            Path.of("./.token");
 
     private TokenStore() {
     }

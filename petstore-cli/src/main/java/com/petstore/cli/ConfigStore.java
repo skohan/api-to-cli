@@ -11,8 +11,9 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Persists CLI configuration (host URL, username, api key) at {@code ~/.petstore-cli/.config}
- * so subsequent invocations don't need the values repeated. Written by the {@code login}
+ * Persists CLI configuration (host URL, username, api key) at {@code ./.petstore-cli/.config}
+ * (under the current working directory) so subsequent invocations don't need the values
+ * repeated. Written by the {@code login}
  * command; read by {@link CliContext} as the fallback below flags and environment variables.
  *
  * The password is deliberately NOT stored -- the bearer token cached by
@@ -25,7 +26,7 @@ public final class ConfigStore {
     public static final String KEY_USERNAME = "username";
 
     private static final Path CONFIG_FILE =
-            Path.of(System.getProperty("user.home"), ".petstore-cli", ".config");
+            Path.of("./.config");
 
     private ConfigStore() {
     }
