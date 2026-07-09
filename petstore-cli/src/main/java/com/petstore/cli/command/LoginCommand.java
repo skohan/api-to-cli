@@ -1,13 +1,11 @@
 package com.petstore.cli.command;
 
 import java.util.Arrays;
-import java.util.Map;
 import java.util.concurrent.Callable;
 
 import com.petstore.cli.CliContext;
-import com.petstore.cli.ConfigStore;
 import com.petstore.cli.auth.AuthClient;
-import com.petstore.cli.auth.TokenStore;
+import com.petstore.cli.auth.CredentialsStore;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -60,15 +58,11 @@ public final class LoginCommand implements Callable<Integer> {
             throw new ParameterException(spec.commandLine(), "Username and password must not be empty.");
         }
         try {
-            String token = new AuthClient(CliContext.baseUrl()).login(username, new String(password));
-            TokenStore.save(token);
-            ConfigStore.save(Map.of(
-                    ConfigStore.KEY_BASE_URL, CliContext.baseUrl(),
-                    ConfigStore.KEY_USERNAME, username,
-                    ConfigStore.KEY_API_KEY, CliContext.apiKey() == null ? "" : CliContext.apiKey()));
-            System.out.println("Login successful.");
-            System.out.println("Token cached at " + TokenStore.location());
-            System.out.println("Config saved at " + ConfigStore.location());
+            String host = CliContext.baseUrl();
+            String token = new AuthClient(host).login(username, new String(password));
+            CredentialsStore.saveLogin(host, token, username, CliContext.apiKey());
+            System.out.println("Login successful for " + host + ".");
+            System.out.println("Credentials saved at " + CredentialsStore.location());
             return 0;
         } catch (RuntimeException e) {
             System.err.println("Login failed: " + e.getMessage());

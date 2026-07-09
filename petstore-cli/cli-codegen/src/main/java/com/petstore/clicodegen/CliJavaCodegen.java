@@ -59,6 +59,7 @@ public class CliJavaCodegen extends JavaClientCodegen {
         // most commonly a stale one in ~/.m2, since `mvn package` never re-installs it.
         System.out.println("[cli-java] CliJavaCodegen active (cliTag=\"" + cliTag + "\")");
         OperationFilter.retainTagged(openAPI, cliTag);
+        FileResponseNormalizer.normalize(openAPI);
         SchemaPruner.pruneUnreachable(openAPI);
         OpenApiSchemaWalker.walkDocument(openAPI, schema -> {
             if (Boolean.TRUE.equals(schema.getUniqueItems())) {

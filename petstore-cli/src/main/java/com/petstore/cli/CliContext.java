@@ -4,46 +4,47 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.petstore.cli.auth.TokenStore;
+import com.petstore.cli.auth.CredentialsStore;
+import com.petstore.cli.auth.CredentialsStore.HostCredentials;
 import com.petstore.cli.generated.ApiClient;
 import com.petstore.cli.generated.api.CliApi;
 
 /**
- * Shared configuration + factory used by the generated command classes. Base URL and API
- * key resolve with the precedence: command-line flag &gt; environment variable &gt;
- * {@code ~/.petstore-cli/.config} (written by the {@code login} command) &gt; default.
- * Subcommands never read the flags directly -- they call {@link #apiClient()} /
- * {@link #api()}, which use the resolved values.
+ * Shared configuration + factory used by the generated command classes.
+ *
+ * The base URL resolves as: command-line flag &gt; {@code PETSTORE_BASE_URL} env &gt; the
+ * current host in {@link CredentialsStore} (set by {@code login}) &gt; {@code http://localhost}.
+ * The api key and bearer token are then looked up for that resolved host, so credentials
+ * are always host-scoped -- switching hosts never uses another host's token. Subcommands
+ * never read the flags directly; they call {@link #apiClient()} / {@link #api()}.
  */
 public final class CliContext {
 
-    private static volatile String baseUrl = firstNonBlank(
-            System.getenv("PETSTORE_BASE_URL"),
-            ConfigStore.get(ConfigStore.KEY_BASE_URL),
-            "http://localhost");
-    private static volatile String apiKey = firstNonBlank(
-            System.getenv("PETSTORE_API_KEY"),
-            ConfigStore.get(ConfigStore.KEY_API_KEY),
-            null);
+    private static volatile String flagBaseUrl;
+    private static volatile String flagApiKey;
 
     private CliContext() {
     }
 
-    /** Applies overrides supplied on the command line; blank/null values are ignored. */
+    /** Records overrides supplied on the command line; blank/null values are ignored. */
     public static void configure(String baseUrlOverride, String apiKeyOverride) {
         if (baseUrlOverride != null && !baseUrlOverride.isBlank()) {
-            baseUrl = baseUrlOverride;
+            flagBaseUrl = baseUrlOverride;
         }
         if (apiKeyOverride != null && !apiKeyOverride.isBlank()) {
-            apiKey = apiKeyOverride;
+            flagApiKey = apiKeyOverride;
         }
     }
 
     public static ApiClient apiClient() {
+        String host = baseUrl();
+        HostCredentials creds = CredentialsStore.get(host);
+        final String key = firstNonBlank(flagApiKey, System.getenv("PETSTORE_API_KEY"),
+                creds == null ? null : creds.apiKey);
+        final String bearer = creds == null ? null : creds.token;
+
         ApiClient client = new ApiClient();
-        client.updateBaseUri(baseUrl);
-        final String key = apiKey;
-        final String bearer = TokenStore.load().orElse(null);
+        client.updateBaseUri(host);
         client.setRequestInterceptor(builder -> {
             if (key != null && !key.isBlank()) {
                 builder.header("api_key", key);
@@ -55,9 +56,10 @@ public final class CliContext {
         return client;
     }
 
-    /** Whether a cached bearer token exists; used by generated commands to gate protected calls. */
+    /** Whether the current host has a cached token; used by generated commands to gate protected calls. */
     public static boolean hasBearerToken() {
-        return TokenStore.load().isPresent();
+        HostCredentials creds = CredentialsStore.get(baseUrl());
+        return creds != null && creds.token != null && !creds.token.isBlank();
     }
 
     public static CliApi api() {
@@ -154,11 +156,14 @@ public final class CliContext {
     }
 
     public static String baseUrl() {
-        return baseUrl;
+        return firstNonBlank(flagBaseUrl, System.getenv("PETSTORE_BASE_URL"),
+                CredentialsStore.currentHost(), "http://localhost");
     }
 
     public static String apiKey() {
-        return apiKey;
+        HostCredentials creds = CredentialsStore.get(baseUrl());
+        return firstNonBlank(flagApiKey, System.getenv("PETSTORE_API_KEY"),
+                creds == null ? null : creds.apiKey);
     }
 
     private static String firstNonBlank(String... values) {
