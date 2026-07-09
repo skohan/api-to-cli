@@ -3,6 +3,8 @@ package com.petstore.cli.command;
 import java.util.concurrent.Callable;
 
 import com.petstore.cli.CliContext;
+import com.petstore.cli.ConfigStore;
+import com.petstore.cli.auth.TokenStore;
 import picocli.CommandLine.Command;
 
 /**
@@ -20,6 +22,14 @@ public final class WhoAmICommand implements Callable<Integer> {
     @Override
     public Integer call() {
         System.out.println("base-url : " + CliContext.baseUrl());
+        System.out.println("username : " + valueOrDash(ConfigStore.get(ConfigStore.KEY_USERNAME)));
+        System.out.println("api-key  : " + (CliContext.apiKey() == null ? "-" : "(set)"));
+        System.out.println("token    : " + (TokenStore.load().isPresent() ? "cached" : "not logged in"));
+        System.out.println("config   : " + ConfigStore.location());
         return 0;
+    }
+
+    private static String valueOrDash(String value) {
+        return (value == null || value.isBlank()) ? "-" : value;
     }
 }

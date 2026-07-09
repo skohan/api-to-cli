@@ -4,18 +4,27 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.petstore.cli.auth.TokenStore;
 import com.petstore.cli.generated.ApiClient;
 import com.petstore.cli.generated.api.CliApi;
 
 /**
- * Shared configuration + factory used by the generated command classes. Base URL and
- * API key come from the root command's global options (see {@link PetstoreCli}), falling
- * back to the {@code PETSTORE_BASE_URL} / {@code PETSTORE_API_KEY} environment variables.
+ * Shared configuration + factory used by the generated command classes. Base URL and API
+ * key resolve with the precedence: command-line flag &gt; environment variable &gt;
+ * {@code ~/.petstore-cli/.config} (written by the {@code login} command) &gt; default.
+ * Subcommands never read the flags directly -- they call {@link #apiClient()} /
+ * {@link #api()}, which use the resolved values.
  */
 public final class CliContext {
 
-    private static volatile String baseUrl = envOrDefault("PETSTORE_BASE_URL", "http://localhost");
-    private static volatile String apiKey = System.getenv("PETSTORE_API_KEY");
+    private static volatile String baseUrl = firstNonBlank(
+            System.getenv("PETSTORE_BASE_URL"),
+            ConfigStore.get(ConfigStore.KEY_BASE_URL),
+            "http://localhost");
+    private static volatile String apiKey = firstNonBlank(
+            System.getenv("PETSTORE_API_KEY"),
+            ConfigStore.get(ConfigStore.KEY_API_KEY),
+            null);
 
     private CliContext() {
     }
@@ -34,10 +43,21 @@ public final class CliContext {
         ApiClient client = new ApiClient();
         client.updateBaseUri(baseUrl);
         final String key = apiKey;
-        if (key != null && !key.isBlank()) {
-            client.setRequestInterceptor(builder -> builder.header("api_key", key));
-        }
+        final String bearer = TokenStore.load().orElse(null);
+        client.setRequestInterceptor(builder -> {
+            if (key != null && !key.isBlank()) {
+                builder.header("api_key", key);
+            }
+            if (bearer != null && !bearer.isBlank()) {
+                builder.header("Authorization", "Bearer " + bearer);
+            }
+        });
         return client;
+    }
+
+    /** Whether a cached bearer token exists; used by generated commands to gate protected calls. */
+    public static boolean hasBearerToken() {
+        return TokenStore.load().isPresent();
     }
 
     public static CliApi api() {
@@ -107,8 +127,16 @@ public final class CliContext {
         return baseUrl;
     }
 
-    private static String envOrDefault(String name, String fallback) {
-        String value = System.getenv(name);
-        return (value == null || value.isBlank()) ? fallback : value;
+    public static String apiKey() {
+        return apiKey;
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }

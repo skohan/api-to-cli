@@ -1,6 +1,8 @@
 package com.petstore.cli;
 
 import com.petstore.cli.command.GeneratedCliCommands;
+import com.petstore.cli.command.LoginCommand;
+import com.petstore.cli.command.LogoutCommand;
 import com.petstore.cli.command.WhoAmICommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -32,18 +34,20 @@ import picocli.CommandLine.ScopeType;
                 GeneratedCliCommands.CreateCustomerOrder.class,
                 GeneratedCliCommands.PlaceOrder.class,
                 // --- your own hand-written commands ---
+                LoginCommand.class,
+                LogoutCommand.class,
                 WhoAmICommand.class,
         })
 public final class PetstoreCli implements Runnable {
 
     @Option(names = "--base-url",
             scope = ScopeType.INHERIT,
-            description = "Base URL of the Petstore API (default: $PETSTORE_BASE_URL or http://localhost).")
+            description = "Base URL of the Petstore API. Precedence: this flag > $PETSTORE_BASE_URL > ~/.petstore-cli/.config > http://localhost.")
     private String baseUrl;
 
     @Option(names = "--api-key",
             scope = ScopeType.INHERIT,
-            description = "Value sent as the api_key header (default: $PETSTORE_API_KEY).")
+            description = "Value sent as the api_key header. Precedence: this flag > $PETSTORE_API_KEY > ~/.petstore-cli/.config.")
     private String apiKey;
 
     @Override

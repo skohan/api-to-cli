@@ -43,7 +43,9 @@ public final class GeneratedCliCommands {
     public static class {{operationIdCamelCase}} implements Callable<Integer> {
 {{#allParams}}
 {{#isFile}}
-        @Option(names = "--{{paramName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
+{{! Option name uses baseName (the spec name, e.g. "file"); the Java field keeps the
+    generator-escaped paramName (e.g. "_file") to match the client method signature. }}
+        @Option(names = "--{{baseName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
                 description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}} (path to a file){{#required}} (required){{/required}}")
         private java.io.File {{paramName}};
 {{/isFile}}
@@ -82,6 +84,12 @@ public final class GeneratedCliCommands {
         @Override
         public Integer call() {
             try {
+{{#authMethods}}{{#isBasicBearer}}
+                if (!CliContext.hasBearerToken()) {
+                    System.err.println("This command requires authentication. Run 'login' first.");
+                    return 2;
+                }
+{{/isBasicBearer}}{{/authMethods}}
 {{#allParams}}{{#isBodyParam}}
 {{#isModel}}
                 java.util.Map<String, Object> {{paramName}}Fields = new java.util.LinkedHashMap<>();

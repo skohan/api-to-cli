@@ -209,9 +209,7 @@ paths:
         405:
           description: Invalid input
       security:
-      - petstore_auth:
-        - write:pets
-        - read:pets
+      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: pet
@@ -243,9 +241,7 @@ paths:
         400:
           description: Invalid pet value
       security:
-      - petstore_auth:
-        - write:pets
-        - read:pets
+      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: pet
@@ -279,9 +275,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
       security:
-      - petstore_auth:
-        - write:pets
-        - read:pets
+      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: pet
@@ -307,6 +301,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerOrder'
+      security:
+      - bearerAuth: []
       x-accepts: application/json
       x-contentType: application/json
   /store/inventory:
@@ -357,6 +353,8 @@ paths:
                 $ref: '#/components/schemas/Order'
         400:
           description: Invalid Order
+      security:
+      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: store
@@ -804,6 +802,10 @@ components:
         status:
           type: string
           description: Updated status of the pet
+          enum:
+          - available
+          - pending
+          - sold
     body_1:
       type: object
       properties:
@@ -850,6 +852,23 @@ components:
           type: integer
           format: int32
           description: Number of items ordered
+        tier:
+          type: string
+          description: Service tier
+          default: standard
+          enum:
+          - standard
+          - express
+        supportedProfiles:
+          type: array
+          uniqueItems: true
+          description: Profiles this order supports
+          items:
+            type: string
+            enum:
+            - dev
+            - test
+            - prod
         customer:
           $ref: '#/components/schemas/Customer'
   requestBodies:
@@ -885,3 +904,10 @@ components:
       type: apiKey
       name: api_key
       in: header
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Bearer token (service ticket) obtained via the `login` command. The token itself
+        is minted by SSO endpoints that are intentionally not part of this API document.
