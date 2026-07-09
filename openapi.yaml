@@ -9,6 +9,8 @@ info:
 externalDocs:
   description: Find out more about OpenAPI generator
   url: https://openapi-generator.tech
+security:
+- bearerToken: []
 tags:
 - name: pet
   description: Everything about your Pets
@@ -208,8 +210,6 @@ paths:
       responses:
         405:
           description: Invalid input
-      security:
-      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: pet
@@ -240,8 +240,6 @@ paths:
       responses:
         400:
           description: Invalid pet value
-      security:
-      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: pet
@@ -274,8 +272,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
-      security:
-      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: pet
@@ -301,8 +297,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerOrder'
-      security:
-      - bearerAuth: []
       x-accepts: application/json
       x-contentType: application/json
   /store/inventory:
@@ -353,8 +347,6 @@ paths:
                 $ref: '#/components/schemas/Order'
         400:
           description: Invalid Order
-      security:
-      - bearerAuth: []
       x-accepts: application/json
       x-tags:
       - tag: store
@@ -869,8 +861,23 @@ components:
             - dev
             - test
             - prod
+        approvedProfiles:
+          $ref: '#/components/schemas/ProfileSet'
         customer:
           $ref: '#/components/schemas/Customer'
+    ProfileEnum:
+      type: string
+      enum:
+      - dev
+      - test
+      - prod
+    ProfileSet:
+      type: array
+      uniqueItems: true
+      description: A standalone, named array-of-enum schema reached via $ref from
+        the property (as opposed to declared inline on the property itself).
+      items:
+        $ref: '#/components/schemas/ProfileEnum'
   requestBodies:
     UserArray:
       description: List of user object
@@ -904,10 +911,12 @@ components:
       type: apiKey
       name: api_key
       in: header
-    bearerAuth:
+    bearerToken:
       type: http
       scheme: bearer
       bearerFormat: JWT
       description: >-
         Bearer token (service ticket) obtained via the `login` command. The token itself
         is minted by SSO endpoints that are intentionally not part of this API document.
+        Declared as the document-level default `security` (see top of file), so any
+        operation that does not declare its own `security` inherits this requirement.

@@ -112,14 +112,25 @@ final class BodyFlattener {
                 continue;
             }
 
-            out.add(leaf(property, path, field, nested));
+            out.add(leaf(property, path, field, nested, models));
         }
     }
 
     private static Map<String, Object> leaf(CodegenProperty property, String path, String field,
-                                            CodegenModel nested) {
-        boolean listOfModels = property.isContainer
-                && property.items != null && property.items.isModel && !property.items.isEnum;
+                                            CodegenModel nested, Map<String, CodegenModel> models) {
+        // property.items.isModel / isEnum are not reliably propagated for $ref'd items in
+        // every generator version (a List<$ref-to-enum> can report both false). Resolve the
+        // item type against the models map directly -- the same technique used for `nested`
+        // above -- rather than trusting those flags.
+        CodegenModel itemsModel = (property.items != null && property.items.complexType != null)
+                ? models.get(property.items.complexType)
+                : null;
+        boolean itemsIsEnum = (property.items != null && property.items.isEnum)
+                || (itemsModel != null && itemsModel.isEnum);
+        boolean itemsIsModel = !itemsIsEnum
+                && ((property.items != null && property.items.isModel) || itemsModel != null);
+
+        boolean listOfModels = property.isContainer && itemsIsModel;
         boolean unflattenable = listOfModels || property.isMap
                 || (property.isModel && property.isContainer)
                 || (property.isModel && !property.isEnum && nested == null); // free-form / cyclic object
@@ -127,8 +138,7 @@ final class BodyFlattener {
         // Depending on the generator version, a List of inline enums may report isEnum on
         // the property itself, only on items, or neither -- cover all of them.
         boolean scalarEnum = property.isEnum && !property.isContainer;
-        boolean listOfEnums = property.isContainer
-                && (property.isEnum || (property.items != null && property.items.isEnum));
+        boolean listOfEnums = property.isContainer && (property.isEnum || itemsIsEnum);
 
         String cliType;
         if (unflattenable || scalarEnum) {

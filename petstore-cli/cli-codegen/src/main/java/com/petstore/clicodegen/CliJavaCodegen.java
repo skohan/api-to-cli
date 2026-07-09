@@ -54,6 +54,10 @@ public class CliJavaCodegen extends JavaClientCodegen {
     @Override
     public void preprocessOpenAPI(OpenAPI openAPI) {
         super.preprocessOpenAPI(openAPI);
+        // Unambiguous proof this class (not a stale jar) is running: search the build
+        // log for "[cli-java]". If it's missing, the plugin resolved a different jar --
+        // most commonly a stale one in ~/.m2, since `mvn package` never re-installs it.
+        System.out.println("[cli-java] CliJavaCodegen active (cliTag=\"" + cliTag + "\")");
         OperationFilter.retainTagged(openAPI, cliTag);
         SchemaPruner.pruneUnreachable(openAPI);
         OpenApiSchemaWalker.walkDocument(openAPI, schema -> {
