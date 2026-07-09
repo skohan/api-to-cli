@@ -31,6 +31,7 @@ import picocli.CommandLine.ScopeType;
                 GeneratedCliCommands.UpdatePetWithForm.class,
                 GeneratedCliCommands.DeletePet.class,
                 GeneratedCliCommands.UploadFile.class,
+                GeneratedCliCommands.DownloadPetPhoto.class,
                 GeneratedCliCommands.CreateCustomerOrder.class,
                 GeneratedCliCommands.PlaceOrder.class,
                 // --- your own hand-written commands ---

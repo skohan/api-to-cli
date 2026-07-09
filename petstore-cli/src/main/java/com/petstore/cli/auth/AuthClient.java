@@ -69,11 +69,21 @@ public final class AuthClient {
                     "Service-ticket exchange failed at " + SERVICE_TICKET_PATH + " (HTTP "
                             + response.statusCode() + "): " + response.body());
         }
-        String token = response.body().trim();
+        // The endpoint returns the ticket as a JSON string, i.e. wrapped in double
+        // quotes. Strip them so the raw token is what gets cached and sent as
+        // "Authorization: Bearer <token>".
+        String token = unquote(response.body().trim());
         if (token.isEmpty()) {
             throw new IllegalStateException("Service-ticket exchange succeeded but no token was returned.");
         }
         return token;
+    }
+
+    private static String unquote(String value) {
+        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            return value.substring(1, value.length() - 1).trim();
+        }
+        return value;
     }
 
     private HttpResponse<String> send(String path, String body, String contentType) {

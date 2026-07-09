@@ -11,6 +11,7 @@
  */
 package com.petstore.cli.command;
 
+import java.io.File;
 import java.math.*;
 import java.time.*;
 import java.util.List;
@@ -80,6 +81,11 @@ public final class GeneratedCliCommands {
 {{/isBodyParam}}
 {{/isFile}}
 {{/allParams}}
+{{#isResponseFile}}
+        @Option(names = {"-o", "--output"},
+                description = "Where to save the downloaded file: a path, or an existing directory to keep the server-suggested name. Default: current directory, server-suggested name.")
+        private java.io.File output;
+{{/isResponseFile}}
 
         @Override
         public Integer call() {
@@ -109,8 +115,14 @@ public final class GeneratedCliCommands {
 {{/isBodyParam}}{{/allParams}}
                 {{classname}} api = CliContext.api();
                 {{#returnType}}{{{returnType}}} result = {{/returnType}}api.{{operationId}}({{#allParams}}{{paramName}}{{^-last}}, {{/-last}}{{/allParams}});
+{{#isResponseFile}}
+                java.io.File saved = CliContext.saveDownload(result, output);
+                System.out.println("Downloaded to " + saved.getAbsolutePath() + " (" + saved.length() + " bytes)");
+{{/isResponseFile}}
+{{^isResponseFile}}
                 {{#returnType}}System.out.println(CliContext.render(result));{{/returnType}}
                 {{^returnType}}System.out.println("{{operationId}}: OK");{{/returnType}}
+{{/isResponseFile}}
                 return 0;
             } catch (ApiException e) {
                 System.err.println("API call failed (HTTP " + e.getCode() + "): " + e.getMessage());

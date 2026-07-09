@@ -123,6 +123,36 @@ public final class CliContext {
         node.put(parts[parts.length - 1], value);
     }
 
+    /**
+     * Moves a file returned by the generated client (a temp file named from the server's
+     * Content-Disposition header, when present) to its final destination. {@code output}
+     * may be null (current directory, keeping the server-suggested name), an existing
+     * directory (file placed inside it), or a target file path (parents created).
+     */
+    public static java.io.File saveDownload(java.io.File downloaded, java.io.File output) {
+        if (downloaded == null) {
+            throw new IllegalStateException("The server returned no file content.");
+        }
+        try {
+            Path target;
+            if (output == null) {
+                target = Path.of(downloaded.getName());
+            } else if (output.isDirectory()) {
+                target = output.toPath().resolve(downloaded.getName());
+            } else {
+                target = output.toPath();
+                if (target.getParent() != null) {
+                    Files.createDirectories(target.getParent());
+                }
+            }
+            Files.move(downloaded.toPath(), target,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return target.toFile();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException("Could not save downloaded file: " + e.getMessage(), e);
+        }
+    }
+
     public static String baseUrl() {
         return baseUrl;
     }
