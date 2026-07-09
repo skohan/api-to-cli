@@ -1,9 +1,5 @@
 package com.petstore.cli.command;
 
-import java.io.BufferedReader;
-import java.io.Console;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -22,10 +18,10 @@ import picocli.CommandLine.Spec;
  * Authenticates against the SSO endpoints and stores the resulting bearer token, which
  * protected commands then send automatically.
  *
- * Prompting uses picocli's built-in interactive options: {@code login -u -p} (flags
- * without values) makes picocli prompt for both, with password input hidden and bound to
- * a char[] that is wiped after use. If a flag is omitted entirely, the command falls back
- * to an equivalent manual prompt, so a bare {@code login} also works.
+ * Prompting is entirely picocli's built-in interactive mechanism: {@code login -u -p}
+ * prompts for both values (password hidden, bound to a char[] wiped after use);
+ * {@code -u alice -p} prompts only for the password. The options are required, so a bare
+ * {@code login} fails fast with a usage error instead of a hand-rolled prompt.
  *
  * On success, the effective base URL, username, and api key (if any) are persisted to
  * {@code ~/.petstore-cli/.config} so subsequent commands need no flags. The password is
@@ -38,18 +34,20 @@ import picocli.CommandLine.Spec;
 public final class LoginCommand implements Callable<Integer> {
 
     @Option(names = {"-u", "--username"},
+            required = true,
             arity = "0..1",
             interactive = true,
             echo = true,
             prompt = "Username: ",
-            description = "Username. Pass without a value to be prompted.")
+            description = "Username. Pass '-u' without a value to be prompted.")
     private String username;
 
     @Option(names = {"-p", "--password"},
+            required = true,
             arity = "0..1",
             interactive = true,
             prompt = "Password: ",
-            description = "Password. Pass without a value to be prompted (input hidden).")
+            description = "Password. Pass '-p' without a value to be prompted (input hidden).")
     private char[] password;
 
     @Spec
@@ -57,14 +55,9 @@ public final class LoginCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        if (username == null || username.isBlank()) {
-            username = promptLine("Username");
-        }
-        if (password == null || password.length == 0) {
-            password = promptSecret("Password");
-        }
+        // Options are present (required=true); guard against empty values typed at the prompt.
         if (username == null || username.isBlank() || password == null || password.length == 0) {
-            throw new ParameterException(spec.commandLine(), "Username and password are required.");
+            throw new ParameterException(spec.commandLine(), "Username and password must not be empty.");
         }
         try {
             String token = new AuthClient(CliContext.baseUrl()).login(username, new String(password));
@@ -82,41 +75,6 @@ public final class LoginCommand implements Callable<Integer> {
             return 1;
         } finally {
             Arrays.fill(password, '\0');
-        }
-    }
-
-    /** Manual prompt for when the option was omitted entirely (mirrors the interactive UX). */
-    private static String promptLine(String label) {
-        Console console = System.console();
-        if (console != null) {
-            return console.readLine("%s: ", label);
-        }
-        return readStdin(label);
-    }
-
-    private static char[] promptSecret(String label) {
-        Console console = System.console();
-        if (console != null) {
-            return console.readPassword("%s: ", label);
-        }
-        String line = readStdin(label);
-        return line == null ? new char[0] : line.toCharArray();
-    }
-
-    /** Single shared reader: a fresh BufferedReader per prompt would buffer ahead and
-     *  starve later prompts when stdin is piped. */
-    private static BufferedReader stdin;
-
-    private static String readStdin(String label) {
-        System.out.print(label + ": ");
-        System.out.flush();
-        try {
-            if (stdin == null) {
-                stdin = new BufferedReader(new InputStreamReader(System.in));
-            }
-            return stdin.readLine();
-        } catch (IOException e) {
-            return null;
         }
     }
 }

@@ -863,6 +863,13 @@ components:
             - prod
         approvedProfiles:
           $ref: '#/components/schemas/ProfileSet'
+        configurations:
+          type: object
+          description: Arbitrary key/value configuration (inline map)
+          additionalProperties:
+            type: string
+        settings:
+          $ref: '#/components/schemas/StringSettings'
         customer:
           $ref: '#/components/schemas/Customer'
     ProfileEnum:
@@ -878,6 +885,11 @@ components:
         the property (as opposed to declared inline on the property itself).
       items:
         $ref: '#/components/schemas/ProfileEnum'
+    StringSettings:
+      type: object
+      description: A standalone, named map schema reached via $ref from the property.
+      additionalProperties:
+        type: string
   requestBodies:
     UserArray:
       description: List of user object

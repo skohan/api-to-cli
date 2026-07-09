@@ -56,7 +56,7 @@ public final class GeneratedCliCommands {
 {{#vendorExtensions}}{{#x-cli-fields}}
 {{#isJson}}
         @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
-                description = "{{#description}}{{description}} {{/description}}(JSON for {{jsonType}}; use @path for a file){{#required}} (required){{/required}}")
+                description = "{{#description}}{{description}} {{/description}}(JSON for {{{jsonType}}}; use @path for a file){{#required}} (required){{/required}}")
         private String {{fieldName}}Json;
 {{/isJson}}
 {{^isJson}}
