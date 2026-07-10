@@ -6,8 +6,10 @@ import com.petstore.cli.command.LogoutCommand;
 import com.petstore.cli.command.WhoAmICommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.ScopeType;
+import picocli.CommandLine.Spec;
 
 /**
  * CLI entry point. Registers every generated command plus any hand-written ones.
@@ -43,18 +45,21 @@ public final class PetstoreCli implements Runnable {
 
     @Option(names = "--base-url",
             scope = ScopeType.INHERIT,
-            description = "Base URL of the Petstore API. Precedence: this flag > $PETSTORE_BASE_URL > ~/.petstore-cli/.config > http://localhost.")
+            description = "Base URL of the Petstore API. Precedence: this flag > $PETSTORE_BASE_URL > current host in .petstore-cli.json > http://localhost.")
     private String baseUrl;
 
     @Option(names = "--api-key",
             scope = ScopeType.INHERIT,
-            description = "Value sent as the api_key header. Precedence: this flag > $PETSTORE_API_KEY > ~/.petstore-cli/.config.")
+            description = "Value sent as the api_key header. Precedence: this flag > $PETSTORE_API_KEY > .petstore-cli.json.")
     private String apiKey;
+
+    @Spec
+    private CommandSpec spec;
 
     @Override
     public void run() {
-        // No subcommand given: show usage.
-        CommandLine.usage(this, System.out);
+        // No subcommand given: show usage on the command's configured output stream.
+        spec.commandLine().usage(spec.commandLine().getOut());
     }
 
     public static void main(String[] args) {

@@ -6,6 +6,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import org.openapitools.codegen.languages.JavaClientCodegen;
 import org.openapitools.codegen.model.ModelMap;
 import org.openapitools.codegen.model.OperationsMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Stock 'java' client generator specialized for CLI generation. It orchestrates three
@@ -27,6 +29,8 @@ import org.openapitools.codegen.model.OperationsMap;
  * Uniqueness remains the server's concern.
  */
 public class CliJavaCodegen extends JavaClientCodegen {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CliJavaCodegen.class);
 
     public static final String NAME = "cli-java";
 
@@ -57,7 +61,7 @@ public class CliJavaCodegen extends JavaClientCodegen {
         // Unambiguous proof this class (not a stale jar) is running: search the build
         // log for "[cli-java]". If it's missing, the plugin resolved a different jar --
         // most commonly a stale one in ~/.m2, since `mvn package` never re-installs it.
-        System.out.println("[cli-java] CliJavaCodegen active (cliTag=\"" + cliTag + "\")");
+        LOGGER.info("[cli-java] CliJavaCodegen active (cliTag=\"{}\")", cliTag);
         OperationFilter.retainTagged(openAPI, cliTag);
         FileResponseNormalizer.normalize(openAPI);
         SchemaPruner.pruneUnreachable(openAPI);

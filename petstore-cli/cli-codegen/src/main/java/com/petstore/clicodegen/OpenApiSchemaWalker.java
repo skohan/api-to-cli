@@ -138,13 +138,13 @@ final class OpenApiSchemaWalker {
         schema(schema.getItems());
         if (schema.getProperties() != null) {
             for (Object value : schema.getProperties().values()) {
-                if (value instanceof Schema) {
-                    schema((Schema) value);
+                if (value instanceof Schema<?> s) {
+                    schema(s);
                 }
             }
         }
-        if (schema.getAdditionalProperties() instanceof Schema) {
-            schema((Schema) schema.getAdditionalProperties());
+        if (schema.getAdditionalProperties() instanceof Schema<?> s) {
+            schema(s);
         }
         schemas(schema.getAllOf());
         schemas(schema.getAnyOf());

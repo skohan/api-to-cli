@@ -61,11 +61,11 @@ public final class LoginCommand implements Callable<Integer> {
             String host = CliContext.baseUrl();
             String token = new AuthClient(host).login(username, new String(password));
             CredentialsStore.saveLogin(host, token, username, CliContext.apiKey());
-            System.out.println("Login successful for " + host + ".");
-            System.out.println("Credentials saved at " + CredentialsStore.location());
+            spec.commandLine().getOut().println("Login successful for " + host + ".");
+            spec.commandLine().getOut().println("Credentials saved at " + CredentialsStore.location());
             return 0;
         } catch (RuntimeException e) {
-            System.err.println("Login failed: " + e.getMessage());
+            spec.commandLine().getErr().println("Login failed: " + e.getMessage());
             return 1;
         } finally {
             Arrays.fill(password, '\0');
