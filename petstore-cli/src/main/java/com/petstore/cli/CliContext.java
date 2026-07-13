@@ -8,6 +8,7 @@ import com.petstore.cli.auth.CredentialsStore;
 import com.petstore.cli.auth.CredentialsStore.HostCredentials;
 import com.petstore.cli.generated.ApiClient;
 import com.petstore.cli.generated.api.CliApi;
+import com.petstore.cli.output.OutputFormat;
 
 /**
  * Shared configuration + factory used by the generated command classes.
@@ -17,22 +18,34 @@ import com.petstore.cli.generated.api.CliApi;
  * The api key and bearer token are then looked up for that resolved host, so credentials
  * are always host-scoped -- switching hosts never uses another host's token. Subcommands
  * never read the flags directly; they call {@link #apiClient()} / {@link #api()}.
+ *
+ * The output format resolves as: command-line flag &gt; {@code PETSTORE_OUTPUT} env &gt;
+ * {@link OutputFormat#JSON}.
  */
 public final class CliContext {
 
     private static volatile String flagBaseUrl;
     private static volatile String flagApiKey;
+    private static volatile OutputFormat flagFormat;
 
     private CliContext() {
     }
 
     /** Records overrides supplied on the command line; blank/null values are ignored. */
     public static void configure(String baseUrlOverride, String apiKeyOverride) {
+        configure(baseUrlOverride, apiKeyOverride, null);
+    }
+
+    /** Records overrides supplied on the command line; blank/null values are ignored. */
+    public static void configure(String baseUrlOverride, String apiKeyOverride, OutputFormat formatOverride) {
         if (baseUrlOverride != null && !baseUrlOverride.isBlank()) {
             flagBaseUrl = baseUrlOverride;
         }
         if (apiKeyOverride != null && !apiKeyOverride.isBlank()) {
             flagApiKey = apiKeyOverride;
+        }
+        if (formatOverride != null) {
+            flagFormat = formatOverride;
         }
     }
 
@@ -66,15 +79,29 @@ public final class CliContext {
         return new CliApi(apiClient());
     }
 
-    /** Pretty-prints a response using the client's configured Jackson mapper. */
+    /** Renders a response in the resolved {@link #outputFormat()} (pretty JSON or a table). */
     public static String render(Object value) {
         try {
-            return apiClient().getObjectMapper()
-                    .writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(value);
+            com.fasterxml.jackson.databind.ObjectMapper mapper = apiClient().getObjectMapper();
+            return outputFormat().format(mapper.valueToTree(value), mapper);
         } catch (Exception e) {
             return String.valueOf(value);
         }
+    }
+
+    public static OutputFormat outputFormat() {
+        if (flagFormat != null) {
+            return flagFormat;
+        }
+        String env = System.getenv("PETSTORE_OUTPUT");
+        if (env != null && !env.isBlank()) {
+            try {
+                return OutputFormat.valueOf(env.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                // fall through to default
+            }
+        }
+        return OutputFormat.JSON;
     }
 
     /**
@@ -102,6 +129,18 @@ public final class CliContext {
      */
     public static <T> T convert(Object fields, TypeReference<T> type) {
         return apiClient().getObjectMapper().convertValue(fields, type);
+    }
+
+    /**
+     * Serializes assembled fields to compact JSON -- used for model-typed multipart parts,
+     * which the generated client transmits as a text part exactly as given.
+     */
+    public static String toJson(Object value) {
+        try {
+            return apiClient().getObjectMapper().writeValueAsString(value);
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not serialize to JSON: " + e.getMessage(), e);
+        }
     }
 
     /**

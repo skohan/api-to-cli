@@ -4,6 +4,7 @@ import com.petstore.cli.command.GeneratedCliCommands;
 import com.petstore.cli.command.LoginCommand;
 import com.petstore.cli.command.LogoutCommand;
 import com.petstore.cli.command.WhoAmICommand;
+import com.petstore.cli.output.OutputFormat;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -53,6 +54,11 @@ public final class PetstoreCli implements Runnable {
             description = "Value sent as the api_key header. Precedence: this flag > $PETSTORE_API_KEY > .petstore-cli.json.")
     private String apiKey;
 
+    @Option(names = {"-f", "--format"},
+            scope = ScopeType.INHERIT,
+            description = "Output format: ${COMPLETION-CANDIDATES}. Precedence: this flag > $PETSTORE_OUTPUT > json.")
+    private OutputFormat format;
+
     @Spec
     private CommandSpec spec;
 
@@ -65,9 +71,11 @@ public final class PetstoreCli implements Runnable {
     public static void main(String[] args) {
         PetstoreCli root = new PetstoreCli();
         CommandLine commandLine = new CommandLine(root);
+        // Accept "--format table" as well as "--format TABLE".
+        commandLine.setCaseInsensitiveEnumValuesAllowed(true);
         // Push the global options into the shared context before the subcommand runs.
         commandLine.setExecutionStrategy(parseResult -> {
-            CliContext.configure(root.baseUrl, root.apiKey);
+            CliContext.configure(root.baseUrl, root.apiKey, root.format);
             return new CommandLine.RunLast().execute(parseResult);
         });
         System.exit(commandLine.execute(args));

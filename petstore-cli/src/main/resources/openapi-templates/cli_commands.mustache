@@ -75,9 +75,28 @@ public final class GeneratedCliCommands {
 {{/isModel}}
 {{/isBodyParam}}
 {{^isBodyParam}}
+{{! Model-typed non-body param (e.g. the JSON part of a multipart body): one option per
+    flattened leaf, prefixed with the part name (--details.caption). The param itself was
+    retyped to String by the codegen, which marks it with x-cli-form-model. }}
+{{#vendorExtensions.x-cli-form-model}}
+{{#vendorExtensions}}{{#x-cli-fields}}
+{{#isJson}}
+        @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
+                description = "{{#description}}{{description}} {{/description}}(JSON for {{{jsonType}}}; use @path for a file){{#required}} (required){{/required}}")
+        private String {{fieldName}}Json;
+{{/isJson}}
+{{^isJson}}
+        @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
+                description = "{{#description}}{{description}}{{/description}}{{^description}}{{optionName}}{{/description}}{{#allowed}} (allowed: {{allowed}}){{/allowed}}{{#required}} (required){{/required}}")
+        private {{{dataType}}} {{fieldName}};
+{{/isJson}}
+{{/x-cli-fields}}{{/vendorExtensions}}
+{{/vendorExtensions.x-cli-form-model}}
+{{^vendorExtensions.x-cli-form-model}}
         @Option(names = "--{{paramName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
                 description = "{{#description}}{{description}}{{/description}}{{^description}}{{baseName}}{{/description}}{{#required}} (required){{/required}}")
         private {{{dataType}}} {{paramName}};
+{{/vendorExtensions.x-cli-form-model}}
 {{/isBodyParam}}
 {{/isFile}}
 {{/allParams}}
@@ -113,6 +132,18 @@ public final class GeneratedCliCommands {
                 {{{dataType}}} {{paramName}} = CliContext.parseJson({{paramName}}Json, new TypeReference<{{{dataType}}}>() {});
 {{/isModel}}
 {{/isBodyParam}}{{/allParams}}
+{{#allParams}}{{^isBodyParam}}{{#vendorExtensions.x-cli-form-model}}
+                java.util.Map<String, Object> {{paramName}}Fields = new java.util.LinkedHashMap<>();
+{{#vendorExtensions}}{{#x-cli-fields}}
+{{#isJson}}
+                if ({{fieldName}}Json != null) CliContext.putPath({{paramName}}Fields, "{{path}}", CliContext.parseJson({{fieldName}}Json, new TypeReference<Object>() {}));
+{{/isJson}}
+{{^isJson}}
+                if ({{fieldName}} != null) CliContext.putPath({{paramName}}Fields, "{{path}}", {{fieldName}});
+{{/isJson}}
+{{/x-cli-fields}}{{/vendorExtensions}}
+                String {{paramName}} = {{paramName}}Fields.isEmpty() ? null : CliContext.toJson({{paramName}}Fields);
+{{/vendorExtensions.x-cli-form-model}}{{/isBodyParam}}{{/allParams}}
                 {{classname}} api = CliContext.api();
                 {{#returnType}}{{{returnType}}} result = {{/returnType}}api.{{operationId}}({{#allParams}}{{paramName}}{{^-last}}, {{/-last}}{{/allParams}});
 {{#isResponseFile}}

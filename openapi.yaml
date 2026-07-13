@@ -261,6 +261,7 @@ paths:
           type: integer
           format: int64
       requestBody:
+        required: true
         content:
           multipart/form-data:
             schema:
@@ -829,6 +830,8 @@ components:
           - sold
     body_1:
       type: object
+      required:
+      - file
       properties:
         additionalMetadata:
           type: string
@@ -837,6 +840,21 @@ components:
           type: string
           description: file to upload
           format: binary
+        details:
+          $ref: '#/components/schemas/PhotoDetails'
+    PhotoDetails:
+      type: object
+      description: Structured metadata sent as a JSON part of the multipart body
+      properties:
+        caption:
+          type: string
+          description: Caption for the photo
+        quality:
+          type: string
+          description: Rendering quality
+          enum:
+          - low
+          - high
     Address:
       type: object
       description: A postal address

@@ -48,10 +48,7 @@ final class BodyFlattener {
                 if (!body.isModel) {
                     continue;
                 }
-                CodegenModel root = modelsByName.get(body.dataType);
-                if (root == null) {
-                    root = modelsByName.get(body.baseType);
-                }
+                CodegenModel root = resolve(body, modelsByName);
                 if (root == null) {
                     continue;
                 }
@@ -59,7 +56,60 @@ final class BodyFlattener {
                 expand(root, modelsByName, "", "", leaves, new ArrayDeque<>());
                 body.vendorExtensions.put("x-cli-fields", leaves);
             }
+            // Model-typed non-body params -- typically the JSON part of a multipart/form-data
+            // request -- get the same flattening, with option names prefixed by the part name
+            // (e.g. --details.caption) so they cannot collide with other parameters. The leaf
+            // "path" stays relative so the assembled map serializes as the part's own JSON.
+            //
+            // The param is also RETYPED to String: the stock native client sends non-file
+            // multipart parts via addTextBody(param.toString()), and a model's toString() is
+            // not JSON. With a String parameter the client transmits exactly the JSON text
+            // the CLI assembles. The template keys on x-cli-form-model for these params.
+            for (CodegenParameter param : nonBodyModelParamsOf(operation)) {
+                CodegenModel root = resolve(param, modelsByName);
+                if (root == null) {
+                    continue;
+                }
+                List<Map<String, Object>> leaves = new ArrayList<>();
+                expand(root, modelsByName, "", "", leaves, new ArrayDeque<>());
+                for (Map<String, Object> leaf : leaves) {
+                    leaf.put("optionName", param.baseName + "." + leaf.get("optionName"));
+                    leaf.put("fieldName", param.paramName + capitalize((String) leaf.get("fieldName")));
+                }
+                param.vendorExtensions.put("x-cli-fields", leaves);
+                param.vendorExtensions.put("x-cli-form-model", true);
+                param.dataType = "String";
+                param.datatypeWithEnum = "String";
+                param.baseType = "String";
+                param.isModel = false;
+                param.isString = true;
+            }
         }
+    }
+
+    private static CodegenModel resolve(CodegenParameter param, Map<String, CodegenModel> modelsByName) {
+        CodegenModel root = modelsByName.get(param.dataType);
+        return root != null ? root : modelsByName.get(param.baseType);
+    }
+
+    /**
+     * Every representation of each model-typed, non-body, non-file parameter (allParams
+     * plus the per-kind lists -- these may be distinct instances, like body params).
+     */
+    private static List<CodegenParameter> nonBodyModelParamsOf(CodegenOperation operation) {
+        List<CodegenParameter> params = new ArrayList<>();
+        for (List<CodegenParameter> list : List.of(
+                operation.allParams == null ? List.<CodegenParameter>of() : operation.allParams,
+                operation.formParams == null ? List.<CodegenParameter>of() : operation.formParams,
+                operation.queryParams == null ? List.<CodegenParameter>of() : operation.queryParams,
+                operation.headerParams == null ? List.<CodegenParameter>of() : operation.headerParams)) {
+            for (CodegenParameter p : list) {
+                if (p.isModel && !p.isBodyParam && !p.isFile && !p.isContainer) {
+                    params.add(p);
+                }
+            }
+        }
+        return params;
     }
 
     /**
