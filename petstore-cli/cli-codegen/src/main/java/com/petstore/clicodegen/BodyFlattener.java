@@ -180,8 +180,19 @@ final class BodyFlattener {
         boolean itemsIsModel = !itemsIsEnum
                 && ((property.items != null && property.items.isModel) || itemsModel != null);
 
+        // A map whose values are a simple scalar (Map<String,String>, Map<String,Integer>, ...)
+        // becomes a repeatable picocli key=value option rather than one opaque JSON blob.
+        // Maps of models / arrays / other maps / enums stay JSON -- key=value can't express those.
+        boolean flattenableMap = property.isMap
+                && property.items != null
+                && !property.items.isModel
+                && !property.items.isContainer
+                && !property.items.isMap
+                && !property.items.isEnum;
+
         boolean listOfModels = property.isContainer && itemsIsModel;
-        boolean unflattenable = listOfModels || property.isMap
+        boolean unflattenable = listOfModels
+                || (property.isMap && !flattenableMap)
                 || (property.isModel && property.isContainer)
                 || (property.isModel && !property.isEnum && nested == null); // free-form / cyclic object
 
@@ -191,7 +202,10 @@ final class BodyFlattener {
         boolean listOfEnums = property.isContainer && (property.isEnum || itemsIsEnum);
 
         String cliType;
-        if (unflattenable || scalarEnum) {
+        if (flattenableMap) {
+            // OpenAPI map keys are always strings; the value type drives picocli's conversion.
+            cliType = "java.util.Map<String, " + property.items.dataType + ">";
+        } else if (unflattenable || scalarEnum) {
             cliType = "String";
         } else if (listOfEnums) {
             cliType = "java.util.List<String>";
@@ -208,6 +222,7 @@ final class BodyFlattener {
         leaf.put("description", property.description == null ? "" : property.description);
         leaf.put("isEnum", property.isEnum);
         leaf.put("isJson", unflattenable);
+        leaf.put("isMap", flattenableMap);
         leaf.put("dataType", cliType);
         leaf.put("jsonType", property.dataType);
         Map<String, Object> allowableValues = property.allowableValues != null

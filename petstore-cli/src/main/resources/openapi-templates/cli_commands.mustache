@@ -61,9 +61,17 @@ public final class GeneratedCliCommands {
         private String {{fieldName}}Json;
 {{/isJson}}
 {{^isJson}}
+{{#isMap}}
+{{! Scalar-valued map: a repeatable picocli key=value option (--opt k1=v1 --opt k2=v2). }}
+        @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
+                description = "{{#description}}{{description}} {{/description}}(repeatable key=value pair){{#required}} (required){{/required}}")
+        private {{{dataType}}} {{fieldName}};
+{{/isMap}}
+{{^isMap}}
         @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
                 description = "{{#description}}{{description}}{{/description}}{{^description}}{{optionName}}{{/description}}{{#allowed}} (allowed: {{allowed}}){{/allowed}}{{#required}} (required){{/required}}")
         private {{{dataType}}} {{fieldName}};
+{{/isMap}}
 {{/isJson}}
 {{/x-cli-fields}}{{/vendorExtensions}}
 {{/isModel}}
@@ -86,9 +94,17 @@ public final class GeneratedCliCommands {
         private String {{fieldName}}Json;
 {{/isJson}}
 {{^isJson}}
+{{#isMap}}
+{{! Scalar-valued map: a repeatable picocli key=value option (--opt k1=v1 --opt k2=v2). }}
+        @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
+                description = "{{#description}}{{description}} {{/description}}(repeatable key=value pair){{#required}} (required){{/required}}")
+        private {{{dataType}}} {{fieldName}};
+{{/isMap}}
+{{^isMap}}
         @Option(names = "--{{optionName}}", required = {{#required}}true{{/required}}{{^required}}false{{/required}},
                 description = "{{#description}}{{description}}{{/description}}{{^description}}{{optionName}}{{/description}}{{#allowed}} (allowed: {{allowed}}){{/allowed}}{{#required}} (required){{/required}}")
         private {{{dataType}}} {{fieldName}};
+{{/isMap}}
 {{/isJson}}
 {{/x-cli-fields}}{{/vendorExtensions}}
 {{/vendorExtensions.x-cli-form-model}}
