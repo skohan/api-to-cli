@@ -1,24 +1,6 @@
 package com.petstore.clicodegen;
 
-import static com.petstore.clicodegen.CliCodegenConstants.ALLOWABLE_VALUES;
-import static com.petstore.clicodegen.CliCodegenConstants.EXT_CLI_FIELDS;
-import static com.petstore.clicodegen.CliCodegenConstants.EXT_CLI_FORM_MODEL;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_ALLOWED;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_BASE_NAME;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_DATA_TYPE;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_DESCRIPTION;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_FIELD_NAME;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_IS_ENUM;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_IS_JSON;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_IS_MAP;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_JSON_TYPE;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_OPTION_NAME;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_PATH;
-import static com.petstore.clicodegen.CliCodegenConstants.LEAF_REQUIRED;
-import static com.petstore.clicodegen.CliCodegenConstants.TYPE_LIST_STRING;
-import static com.petstore.clicodegen.CliCodegenConstants.TYPE_MAP_PREFIX;
-import static com.petstore.clicodegen.CliCodegenConstants.TYPE_MAP_SUFFIX;
-import static com.petstore.clicodegen.CliCodegenConstants.TYPE_STRING;
+import static com.petstore.clicodegen.CliCodegenConstants.*;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -230,7 +212,7 @@ final class BodyFlattener {
                                          Map<String, CodegenModel> models) {
         if (isFlattenableMap(property)) {
             // OpenAPI map keys are always strings; the value type drives picocli's conversion.
-            return TYPE_MAP_PREFIX + mapValueSchema(property).dataType + TYPE_MAP_SUFFIX;
+            return "java.util.Map<String, " + mapValueSchema(property).dataType + ">";
         }
         if (isUnflattenable(property, nested, models) || isScalarEnum(property)) {
             return TYPE_STRING;

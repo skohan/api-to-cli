@@ -36,7 +36,5 @@ final class CliCodegenConstants {
 
     // --- CLI-safe Java types emitted for options ---
     static final String TYPE_STRING = "String";
-    static final String TYPE_MAP_PREFIX = "java.util.Map<String, ";
-    static final String TYPE_MAP_SUFFIX = ">";
     static final String TYPE_LIST_STRING = "java.util.List<String>";
 }
