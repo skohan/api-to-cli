@@ -1,6 +1,9 @@
 package com.petstore.clicodegen;
 
+import java.io.File;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import org.openapitools.codegen.languages.JavaClientCodegen;
@@ -21,6 +24,9 @@ import org.slf4j.LoggerFactory;
  *   <li>{@link BodyFlattener} -- expands each request-body model into the
  *       {@code x-cli-fields} vendor extension that the CLI template renders as one
  *       picocli option per (nested) leaf field.</li>
+ *   <li>{@link MultipartJsonPartFixer} -- rewrites the generated client so JSON multipart
+ *       parts are sent as {@code application/json} rather than the stock template's
+ *       {@code text/plain}, which servers reject.</li>
  * </ul>
  *
  * It also strips {@code uniqueItems} from all array schemas, so they generate as List
@@ -36,6 +42,13 @@ public class CliJavaCodegen extends JavaClientCodegen {
 
     /** Tag that marks an operation as a CLI command; override with configOption cliTag. */
     protected String cliTag = "cli";
+
+    /**
+     * Per-JSON-part source replacements the {@link MultipartJsonPartFixer} applies to the
+     * generated API file. Populated while post-processing operations (before the file is
+     * rendered) and consumed in {@link #postProcessFile} (after it is written).
+     */
+    private final Map<String, String> multipartJsonRewrites = new LinkedHashMap<>();
 
     @Override
     public String getName() {
@@ -53,6 +66,8 @@ public class CliJavaCodegen extends JavaClientCodegen {
         if (additionalProperties.containsKey("cliTag")) {
             cliTag = additionalProperties.get("cliTag").toString();
         }
+        // Enable the postProcessFile hook so we can fix JSON multipart part Content-Types.
+        setEnablePostProcessFile(true);
     }
 
     @Override
@@ -76,6 +91,17 @@ public class CliJavaCodegen extends JavaClientCodegen {
     public OperationsMap postProcessOperationsWithModels(OperationsMap objs, List<ModelMap> allModels) {
         OperationsMap result = super.postProcessOperationsWithModels(objs, allModels);
         BodyFlattener.attachCliFields(result, allModels);
+        MultipartJsonPartFixer.collectRewrites(result, multipartJsonRewrites);
         return result;
+    }
+
+    @Override
+    public void postProcessFile(File file, String fileType) {
+        // Not delegating to super: its only behavior is spawning an external formatter
+        // (JAVA_POST_PROCESS_FILE), which this project does not use. We only need the hook
+        // to correct the Content-Type of JSON multipart parts in the generated API source.
+        if ("api".equals(fileType)) {
+            MultipartJsonPartFixer.apply(file.toPath(), multipartJsonRewrites);
+        }
     }
 }
