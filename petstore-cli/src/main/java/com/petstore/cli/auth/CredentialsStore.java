@@ -1,102 +1,73 @@
 package com.petstore.cli.auth;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import java.util.Properties;
 
 /**
- * Unified, per-host credential + config store -- the CLI's equivalent of kubeconfig.
- * A single JSON file holds, for each host (base URL), its bearer token, username and api
- * key, plus a {@code currentHost} pointer (like kubectl's current-context). Logging in to
- * a host stores its token there and makes it current; switching hosts therefore never
- * clobbers another host's token.
+ * Single-host CLI configuration, stored as a hidden {@code .config} file in the current working
+ * directory. It holds the host (base URL), the bearer token (the service ticket obtained at
+ * {@code login}), and the username, so later commands need no flags.
  *
+ * The bearer token is the only credential stored: it is what protected commands actually send.
+ * The api key is not persisted -- if some endpoint needs the {@code api_key} header, it is taken
+ * from {@code PETSTORE_API_KEY} at call time.
+ *
+ * The format is a plain {@code key=value} properties file, not JSON:
  * <pre>
- * {
- *   "currentHost": "https://prod.example.com",
- *   "hosts": {
- *     "https://prod.example.com":  { "token": "...", "username": "alice" },
- *     "http://localhost:8080":     { "token": "...", "username": "dev" }
- *   }
- * }
+ * host=https://prod.example.com
+ * token=...
+ * username=alice
  * </pre>
  *
- * The password is never stored -- the cached bearer token is the durable credential.
+ * Multi-host support was intentionally dropped for now; exactly one current host is stored. The
+ * file is hidden via the leading dot (Linux/macOS) and the DOS hidden attribute (Windows).
  */
 public final class CredentialsStore {
 
-    /** Credentials + config for a single host. */
-    @JsonAutoDetect(fieldVisibility = Visibility.ANY, getterVisibility = Visibility.NONE,
-            setterVisibility = Visibility.NONE, isGetterVisibility = Visibility.NONE)
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static final class HostCredentials {
-        public String token;
-        public String username;
-        public String apiKey;
-    }
+    private static final Path FILE = Path.of("./.config");
 
-    @JsonAutoDetect(fieldVisibility = Visibility.ANY, getterVisibility = Visibility.NONE,
-            setterVisibility = Visibility.NONE, isGetterVisibility = Visibility.NONE)
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    static final class Root {
-        public String currentHost;
-        public Map<String, HostCredentials> hosts = new LinkedHashMap<>();
-    }
-
-    private static final Path FILE = Path.of("./.petstore-cli.json");
-
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final String KEY_HOST = "host";
+    private static final String KEY_TOKEN = "token";
+    private static final String KEY_USERNAME = "username";
 
     private CredentialsStore() {
     }
 
-    /** The host most recently logged in to (or selected), or null if none. */
-    public static String currentHost() {
-        return load().currentHost;
+    /** The stored host (base URL), or null if not set. */
+    public static String host() {
+        return trimToNull(load().getProperty(KEY_HOST));
     }
 
-    /** Credentials for a host, or null if that host is unknown. */
-    public static HostCredentials get(String host) {
-        return host == null ? null : load().hosts.get(host);
+    /** The stored bearer token (service ticket), or null if not logged in. */
+    public static String token() {
+        return trimToNull(load().getProperty(KEY_TOKEN));
     }
 
-    /** All known hosts, for display. */
-    public static Map<String, HostCredentials> hosts() {
-        return load().hosts;
+    /** The stored username, or null if not set. */
+    public static String username() {
+        return trimToNull(load().getProperty(KEY_USERNAME));
     }
 
-    /** Stores the token/username/api-key under the host and makes it the current host. */
-    public static void saveLogin(String host, String token, String username, String apiKey) {
-        Root root = load();
-        HostCredentials creds = root.hosts.computeIfAbsent(host, k -> new HostCredentials());
-        creds.token = token;
-        if (username != null && !username.isBlank()) {
-            creds.username = username;
-        }
-        creds.apiKey = (apiKey == null || apiKey.isBlank()) ? null : apiKey;
-        root.currentHost = host;
-        store(root);
+    /** Persists the host/token/username captured at login. */
+    public static void save(String host, String token, String username) {
+        Properties props = new Properties();
+        putIfPresent(props, KEY_HOST, host);
+        putIfPresent(props, KEY_TOKEN, token);
+        putIfPresent(props, KEY_USERNAME, username);
+        store(props);
     }
 
-    /** Removes just the token for a host (keeps username for easy re-login). No-op if unknown. */
-    public static void clearToken(String host) {
-        Root root = load();
-        HostCredentials creds = root.hosts.get(host);
-        if (creds != null && creds.token != null) {
-            creds.token = null;
-            store(root);
+    /** Deletes the config file entirely. No-op if it is absent. */
+    public static void clear() {
+        try {
+            Files.deleteIfExists(FILE);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not remove " + FILE, e);
         }
     }
 
@@ -104,26 +75,54 @@ public final class CredentialsStore {
         return FILE;
     }
 
-    private static Root load() {
+    private static Properties load() {
+        Properties props = new Properties();
         if (Files.exists(FILE)) {
-            try {
-                return MAPPER.readValue(FILE.toFile(), Root.class);
+            try (InputStream in = Files.newInputStream(FILE)) {
+                props.load(in);
             } catch (IOException e) {
                 // Unreadable/corrupt file: behave as if empty rather than crash every command.
             }
         }
-        return new Root();
+        return props;
     }
 
-    private static void store(Root root) {
+    private static void store(Properties props) {
         try {
             Path parent = FILE.toAbsolutePath().getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-            MAPPER.writeValue(FILE.toFile(), root);
+            // Recreate rather than truncate: rewriting a file that already carries the Windows
+            // hidden attribute in place throws AccessDeniedException on that platform.
+            Files.deleteIfExists(FILE);
+            try (OutputStream out = Files.newOutputStream(FILE)) {
+                props.store(out, "petstore-cli configuration");
+            }
+            hide(FILE);
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not write credentials at " + FILE, e);
+            throw new UncheckedIOException("Could not write config at " + FILE, e);
         }
+    }
+
+    private static void hide(Path path) {
+        try {
+            Object hidden = Files.getAttribute(path, "dos:hidden");
+            if (Boolean.FALSE.equals(hidden)) {
+                Files.setAttribute(path, "dos:hidden", Boolean.TRUE);
+            }
+        } catch (UnsupportedOperationException | IOException | IllegalArgumentException ignored) {
+            // Non-DOS filesystem (Linux/macOS): the leading dot already hides it.
+        }
+    }
+
+    private static void putIfPresent(Properties props, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            props.setProperty(key, value);
+        }
+    }
+
+    private static String trimToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 }

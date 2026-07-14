@@ -2,36 +2,25 @@ package com.petstore.cli.command;
 
 import java.util.concurrent.Callable;
 
-import com.petstore.cli.CliContext;
 import com.petstore.cli.auth.CredentialsStore;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
-import picocli.CommandLine.Option;
 import picocli.CommandLine.Spec;
 
-/** Discards the cached bearer token for the current host (or all hosts with {@code --all}). */
+/** Logs out by deleting the stored config file (host, token, and username). */
 @Command(
         name = "logout",
-        description = "Discard the cached bearer token for the current host.",
+        description = "Log out by deleting the stored config file.",
         mixinStandardHelpOptions = true)
 public final class LogoutCommand implements Callable<Integer> {
-
-    @Option(names = "--all", description = "Clear cached tokens for every known host.")
-    private boolean all;
 
     @Spec
     private CommandSpec spec;
 
     @Override
     public Integer call() {
-        if (all) {
-            CredentialsStore.hosts().keySet().forEach(CredentialsStore::clearToken);
-            spec.commandLine().getOut().println("Logged out of all hosts.");
-        } else {
-            String host = CliContext.baseUrl();
-            CredentialsStore.clearToken(host);
-            spec.commandLine().getOut().println("Logged out of " + host + ".");
-        }
+        CredentialsStore.clear();
+        spec.commandLine().getOut().println("Logged out and removed " + CredentialsStore.location() + ".");
         return 0;
     }
 }

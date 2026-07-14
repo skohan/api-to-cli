@@ -5,7 +5,6 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.openapitools.codegen.CodegenOperation;
@@ -46,7 +45,7 @@ final class MultipartJsonPartFixer {
                 continue;
             }
             for (CodegenParameter part : op.formParams) {
-                if (!Boolean.TRUE.equals(part.vendorExtensions.get("x-cli-form-model"))) {
+                if (!Boolean.TRUE.equals(part.vendorExtensions.get(CliCodegenConstants.EXT_CLI_FORM_MODEL))) {
                     continue;
                 }
                 String call = "multiPartBuilder.addTextBody(\"" + part.baseName + "\", " + part.paramName;

@@ -1,5 +1,6 @@
 package com.petstore.cli.command;
 
+import java.io.Console;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 
@@ -13,23 +14,28 @@ import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.Spec;
 
 /**
- * Authenticates against the SSO endpoints and stores the resulting bearer token, which
+ * Authenticates against the SSO endpoints and caches the resulting bearer token, which
  * protected commands then send automatically.
  *
- * Prompting is entirely picocli's built-in interactive mechanism: {@code login -u -p}
- * prompts for both values (password hidden, bound to a char[] wiped after use);
- * {@code -u alice -p} prompts only for the password. The options are required, so a bare
- * {@code login} fails fast with a usage error instead of a hand-rolled prompt.
+ * The host is accepted here only (ordinary commands take no {@code --base-url}): it is persisted
+ * together with the bearer token to the hidden {@code .config} so later commands need no flags.
+ * The password is never stored -- the cached bearer token (service ticket) is the durable
+ * credential.
  *
- * On success, the effective base URL, username, and api key (if any) are persisted to
- * {@code ~/.petstore-cli/.config} so subsequent commands need no flags. The password is
- * never persisted -- the cached bearer token is the durable credential.
+ * The password is always read from an interactive console prompt and is deliberately NOT a
+ * command-line option, so it can never leak into shell history or the process list. The username
+ * may be supplied with {@code -u alice} or, when omitted, is prompted for.
  */
 @Command(
         name = "login",
         description = "Authenticate and cache a bearer token for protected commands.",
         mixinStandardHelpOptions = true)
 public final class LoginCommand implements Callable<Integer> {
+
+    @Option(names = "--base-url",
+            description = "Base URL of the Petstore API to log in to. "
+                    + "Precedence: this flag > $PETSTORE_BASE_URL > stored host > http://localhost.")
+    private String baseUrl;
 
     @Option(names = {"-u", "--username"},
             required = true,
@@ -40,29 +46,34 @@ public final class LoginCommand implements Callable<Integer> {
             description = "Username. Pass '-u' without a value to be prompted.")
     private String username;
 
-    @Option(names = {"-p", "--password"},
-            required = true,
-            arity = "0..1",
-            interactive = true,
-            prompt = "Password: ",
-            description = "Password. Pass '-p' without a value to be prompted (input hidden).")
-    private char[] password;
-
     @Spec
     private CommandSpec spec;
 
     @Override
     public Integer call() {
-        // Options are present (required=true); guard against empty values typed at the prompt.
-        if (username == null || username.isBlank() || password == null || password.length == 0) {
-            throw new ParameterException(spec.commandLine(), "Username and password must not be empty.");
+        if (username == null || username.isBlank()) {
+            throw new ParameterException(spec.commandLine(), "Username must not be empty.");
+        }
+        Console console = System.console();
+        if (console == null) {
+            spec.commandLine().getErr().println(
+                    "No interactive console is available to read the password. Run login in a terminal.");
+            return 2;
+        }
+        char[] password = console.readPassword("Password: ");
+        if (password == null) {
+            password = new char[0];
         }
         try {
-            String host = CliContext.baseUrl();
+            if (password.length == 0) {
+                throw new ParameterException(spec.commandLine(), "Password must not be empty.");
+            }
+            String host = CliContext.resolveBaseUrl(baseUrl);
             String token = new AuthClient(host).login(username, new String(password));
-            CredentialsStore.saveLogin(host, token, username, CliContext.apiKey());
+
+            CredentialsStore.save(host, token, username);
             spec.commandLine().getOut().println("Login successful for " + host + ".");
-            spec.commandLine().getOut().println("Credentials saved at " + CredentialsStore.location());
+            spec.commandLine().getOut().println("Credentials saved at " + CredentialsStore.location() + ".");
             return 0;
         } catch (RuntimeException e) {
             spec.commandLine().getErr().println("Login failed: " + e.getMessage());

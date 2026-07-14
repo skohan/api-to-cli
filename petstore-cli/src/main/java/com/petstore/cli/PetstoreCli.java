@@ -44,15 +44,9 @@ import picocli.CommandLine.Spec;
         })
 public final class PetstoreCli implements Runnable {
 
-    @Option(names = "--base-url",
-            scope = ScopeType.INHERIT,
-            description = "Base URL of the Petstore API. Precedence: this flag > $PETSTORE_BASE_URL > current host in .petstore-cli.json > http://localhost.")
-    private String baseUrl;
-
-    @Option(names = "--api-key",
-            scope = ScopeType.INHERIT,
-            description = "Value sent as the api_key header. Precedence: this flag > $PETSTORE_API_KEY > .petstore-cli.json.")
-    private String apiKey;
+    // Host and api key are captured once at `login` (see LoginCommand) and read from the
+    // stored config or PETSTORE_BASE_URL/PETSTORE_API_KEY thereafter; they are intentionally
+    // not global flags on ordinary commands.
 
     @Option(names = {"-f", "--format"},
             scope = ScopeType.INHERIT,
@@ -73,9 +67,9 @@ public final class PetstoreCli implements Runnable {
         CommandLine commandLine = new CommandLine(root);
         // Accept "--format table" as well as "--format TABLE".
         commandLine.setCaseInsensitiveEnumValuesAllowed(true);
-        // Push the global options into the shared context before the subcommand runs.
+        // Push the global --format option into the shared context before the subcommand runs.
         commandLine.setExecutionStrategy(parseResult -> {
-            CliContext.configure(root.baseUrl, root.apiKey, root.format);
+            CliContext.configure(root.format);
             return new CommandLine.RunLast().execute(parseResult);
         });
         System.exit(commandLine.execute(args));

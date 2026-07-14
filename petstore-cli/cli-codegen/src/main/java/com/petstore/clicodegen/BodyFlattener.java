@@ -1,5 +1,25 @@
 package com.petstore.clicodegen;
 
+import static com.petstore.clicodegen.CliCodegenConstants.ALLOWABLE_VALUES;
+import static com.petstore.clicodegen.CliCodegenConstants.EXT_CLI_FIELDS;
+import static com.petstore.clicodegen.CliCodegenConstants.EXT_CLI_FORM_MODEL;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_ALLOWED;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_BASE_NAME;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_DATA_TYPE;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_DESCRIPTION;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_FIELD_NAME;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_IS_ENUM;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_IS_JSON;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_IS_MAP;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_JSON_TYPE;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_OPTION_NAME;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_PATH;
+import static com.petstore.clicodegen.CliCodegenConstants.LEAF_REQUIRED;
+import static com.petstore.clicodegen.CliCodegenConstants.TYPE_LIST_STRING;
+import static com.petstore.clicodegen.CliCodegenConstants.TYPE_MAP_PREFIX;
+import static com.petstore.clicodegen.CliCodegenConstants.TYPE_MAP_SUFFIX;
+import static com.petstore.clicodegen.CliCodegenConstants.TYPE_STRING;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -7,6 +27,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.openapitools.codegen.CodegenModel;
 import org.openapitools.codegen.CodegenOperation;
@@ -34,57 +55,78 @@ final class BodyFlattener {
     }
 
     static void attachCliFields(OperationsMap operations, List<ModelMap> allModels) {
-        Map<String, CodegenModel> modelsByName = new HashMap<>();
-        for (ModelMap modelMap : allModels) {
-            CodegenModel model = modelMap.getModel();
-            if (model != null) {
-                modelsByName.put(model.classname, model);
-                modelsByName.put(model.name, model);
-            }
-        }
+        Map<String, CodegenModel> modelsByName = indexModels(allModels);
+        operations.getOperations().getOperation().forEach(operation -> {
+            attachBodyFields(operation, modelsByName);
+            attachFormModelFields(operation, modelsByName);
+        });
+    }
 
-        for (CodegenOperation operation : operations.getOperations().getOperation()) {
-            for (CodegenParameter body : bodyParamsOf(operation)) {
-                if (!body.isModel) {
-                    continue;
-                }
-                CodegenModel root = resolve(body, modelsByName);
-                if (root == null) {
-                    continue;
-                }
-                List<Map<String, Object>> leaves = new ArrayList<>();
-                expand(root, modelsByName, "", "", leaves, new ArrayDeque<>());
-                body.vendorExtensions.put("x-cli-fields", leaves);
-            }
-            // Model-typed non-body params -- typically the JSON part of a multipart/form-data
-            // request -- get the same flattening, with option names prefixed by the part name
-            // (e.g. --details.caption) so they cannot collide with other parameters. The leaf
-            // "path" stays relative so the assembled map serializes as the part's own JSON.
-            //
-            // The param is also RETYPED to String: the stock native client sends non-file
-            // multipart parts via addTextBody(param.toString()), and a model's toString() is
-            // not JSON. With a String parameter the client transmits exactly the JSON text
-            // the CLI assembles. The template keys on x-cli-form-model for these params.
-            for (CodegenParameter param : nonBodyModelParamsOf(operation)) {
-                CodegenModel root = resolve(param, modelsByName);
-                if (root == null) {
-                    continue;
-                }
-                List<Map<String, Object>> leaves = new ArrayList<>();
-                expand(root, modelsByName, "", "", leaves, new ArrayDeque<>());
-                for (Map<String, Object> leaf : leaves) {
-                    leaf.put("optionName", param.baseName + "." + leaf.get("optionName"));
-                    leaf.put("fieldName", param.paramName + capitalize((String) leaf.get("fieldName")));
-                }
-                param.vendorExtensions.put("x-cli-fields", leaves);
-                param.vendorExtensions.put("x-cli-form-model", true);
-                param.dataType = "String";
-                param.datatypeWithEnum = "String";
-                param.baseType = "String";
-                param.isModel = false;
-                param.isString = true;
+    /** Indexes every model by both its classname and its name, for lookup during expansion. */
+    private static Map<String, CodegenModel> indexModels(List<ModelMap> allModels) {
+        Map<String, CodegenModel> byName = new HashMap<>();
+        allModels.stream()
+                .map(ModelMap::getModel)
+                .filter(Objects::nonNull)
+                .forEach(model -> {
+                    byName.put(model.classname, model);
+                    byName.put(model.name, model);
+                });
+        return byName;
+    }
+
+    /** Body models: one flattened option per (recursively) nested leaf field. */
+    private static void attachBodyFields(CodegenOperation operation, Map<String, CodegenModel> modelsByName) {
+        for (CodegenParameter body : bodyParamsOf(operation)) {
+            CodegenModel root = body.isModel ? resolve(body, modelsByName) : null;
+            if (root != null) {
+                body.vendorExtensions.put(EXT_CLI_FIELDS, flatten(root, modelsByName));
             }
         }
+    }
+
+    /**
+     * Model-typed non-body params -- typically the JSON part of a multipart/form-data request --
+     * get the same flattening, with option names prefixed by the part name (e.g. --details.caption)
+     * so they cannot collide with other parameters; the leaf "path" stays relative so the assembled
+     * map serializes as the part's own JSON. The param is also retyped to String: the stock native
+     * client sends non-file multipart parts via addTextBody(param.toString()), and a model's
+     * toString() is not JSON, so a String parameter transmits exactly the JSON the CLI assembles.
+     */
+    private static void attachFormModelFields(CodegenOperation operation, Map<String, CodegenModel> modelsByName) {
+        for (CodegenParameter param : nonBodyModelParamsOf(operation)) {
+            CodegenModel root = resolve(param, modelsByName);
+            if (root == null) {
+                continue;
+            }
+            List<Map<String, Object>> leaves = flatten(root, modelsByName);
+            leaves.forEach(leaf -> prefixWithPartName(leaf, param));
+            param.vendorExtensions.put(EXT_CLI_FIELDS, leaves);
+            param.vendorExtensions.put(EXT_CLI_FORM_MODEL, true);
+            retypeToString(param);
+        }
+    }
+
+    /** Flattens a model into its list of leaf-field maps. */
+    private static List<Map<String, Object>> flatten(CodegenModel root, Map<String, CodegenModel> modelsByName) {
+        List<Map<String, Object>> leaves = new ArrayList<>();
+        expand(root, modelsByName, "", "", leaves, new ArrayDeque<>());
+        return leaves;
+    }
+
+    /** Prefixes a leaf's option/field names with the multipart part name so they stay unique. */
+    private static void prefixWithPartName(Map<String, Object> leaf, CodegenParameter param) {
+        leaf.put(LEAF_OPTION_NAME, param.baseName + "." + leaf.get(LEAF_OPTION_NAME));
+        leaf.put(LEAF_FIELD_NAME, param.paramName + capitalize((String) leaf.get(LEAF_FIELD_NAME)));
+    }
+
+    /** Retypes a form-model param to a plain JSON String so the client sends it verbatim. */
+    private static void retypeToString(CodegenParameter param) {
+        param.dataType = TYPE_STRING;
+        param.datatypeWithEnum = TYPE_STRING;
+        param.baseType = TYPE_STRING;
+        param.isModel = false;
+        param.isString = true;
     }
 
     private static CodegenModel resolve(CodegenParameter param, Map<String, CodegenModel> modelsByName) {
@@ -168,78 +210,110 @@ final class BodyFlattener {
 
     private static Map<String, Object> leaf(CodegenProperty property, String path, String field,
                                             CodegenModel nested, Map<String, CodegenModel> models) {
-        // property.items.isModel / isEnum are not reliably propagated for $ref'd items in
-        // every generator version (a List<$ref-to-enum> can report both false). Resolve the
-        // item type against the models map directly -- the same technique used for `nested`
-        // above -- rather than trusting those flags.
-        CodegenModel itemsModel = (property.items != null && property.items.complexType != null)
-                ? models.get(property.items.complexType)
-                : null;
-        boolean itemsIsEnum = (property.items != null && property.items.isEnum)
-                || (itemsModel != null && itemsModel.isEnum);
-        boolean itemsIsModel = !itemsIsEnum
-                && ((property.items != null && property.items.isModel) || itemsModel != null);
+        Map<String, Object> leaf = new LinkedHashMap<>();
+        leaf.put(LEAF_OPTION_NAME, path);
+        leaf.put(LEAF_PATH, path);
+        leaf.put(LEAF_FIELD_NAME, field);
+        leaf.put(LEAF_BASE_NAME, property.baseName);
+        leaf.put(LEAF_REQUIRED, property.required);
+        leaf.put(LEAF_DESCRIPTION, property.description == null ? "" : property.description);
+        leaf.put(LEAF_IS_ENUM, property.isEnum);
+        leaf.put(LEAF_IS_JSON, isUnflattenable(property, nested, models));
+        leaf.put(LEAF_IS_MAP, isFlattenableMap(property));
+        leaf.put(LEAF_DATA_TYPE, resolveCliType(property, nested, models));
+        leaf.put(LEAF_JSON_TYPE, property.dataType);
+        putAllowedValues(leaf, property, models);
+        return leaf;
+    }
 
-        // A map whose values are a simple scalar (Map<String,String>, Map<String,Integer>, ...)
-        // becomes a repeatable picocli key=value option rather than one opaque JSON blob.
-        // Maps of models / arrays / other maps / enums stay JSON -- key=value can't express those.
-        //
-        // The map's value schema lives in `items` on some generator versions and in
-        // `additionalProperties` on others; consult whichever one this version populated.
+    private static String resolveCliType(CodegenProperty property, CodegenModel nested,
+                                         Map<String, CodegenModel> models) {
+        if (isFlattenableMap(property)) {
+            // OpenAPI map keys are always strings; the value type drives picocli's conversion.
+            return TYPE_MAP_PREFIX + mapValueSchema(property).dataType + TYPE_MAP_SUFFIX;
+        }
+        if (isUnflattenable(property, nested, models) || isScalarEnum(property)) {
+            return TYPE_STRING;
+        }
+        if (isListOfEnums(property, models)) {
+            return TYPE_LIST_STRING;
+        }
+        return property.datatypeWithEnum;
+    }
+
+    /**
+     * A value that cannot map onto a fixed set of options -- an array of models, a map of
+     * non-scalars, or a free-form / cyclic object -- and so stays a single JSON option.
+     */
+    private static boolean isUnflattenable(CodegenProperty property, CodegenModel nested,
+                                           Map<String, CodegenModel> models) {
+        return (property.isContainer && itemsIsModel(property, models))
+                || (property.isMap && !isFlattenableMap(property))
+                || (property.isModel && property.isContainer)
+                || (property.isModel && !property.isEnum && nested == null);
+    }
+
+    /**
+     * A map whose values are a simple scalar (Map&lt;String,String&gt;, Map&lt;String,Integer&gt;, ...),
+     * which becomes a repeatable picocli key=value option rather than one opaque JSON blob. Maps of
+     * models / arrays / other maps / enums stay JSON -- key=value cannot express those.
+     */
+    private static boolean isFlattenableMap(CodegenProperty property) {
         CodegenProperty mapValue = mapValueSchema(property);
-        boolean flattenableMap = property.isMap
+        return property.isMap
                 && mapValue != null
                 && mapValue.dataType != null
                 && !mapValue.isModel
                 && !mapValue.isContainer
                 && !mapValue.isMap
                 && !mapValue.isEnum;
+    }
 
-        boolean listOfModels = property.isContainer && itemsIsModel;
-        boolean unflattenable = listOfModels
-                || (property.isMap && !flattenableMap)
-                || (property.isModel && property.isContainer)
-                || (property.isModel && !property.isEnum && nested == null); // free-form / cyclic object
+    private static boolean isScalarEnum(CodegenProperty property) {
+        return property.isEnum && !property.isContainer;
+    }
 
-        // Depending on the generator version, a List of inline enums may report isEnum on
-        // the property itself, only on items, or neither -- cover all of them.
-        boolean scalarEnum = property.isEnum && !property.isContainer;
-        boolean listOfEnums = property.isContainer && (property.isEnum || itemsIsEnum);
+    /** A List of enums, whose isEnum may sit on the property, only on its items, or neither. */
+    private static boolean isListOfEnums(CodegenProperty property, Map<String, CodegenModel> models) {
+        return property.isContainer && (property.isEnum || itemsIsEnum(property, models));
+    }
 
-        String cliType;
-        if (flattenableMap) {
-            // OpenAPI map keys are always strings; the value type drives picocli's conversion.
-            cliType = "java.util.Map<String, " + mapValue.dataType + ">";
-        } else if (unflattenable || scalarEnum) {
-            cliType = "String";
-        } else if (listOfEnums) {
-            cliType = "java.util.List<String>";
-        } else {
-            cliType = property.datatypeWithEnum;
+    // property.items.isModel / isEnum are not reliably propagated for $ref'd items in every
+    // generator version (a List<$ref-to-enum> can report both false), so the helpers below
+    // resolve the item type against the models map directly rather than trusting those flags.
+
+    private static CodegenModel itemsModel(CodegenProperty property, Map<String, CodegenModel> models) {
+        return (property.items != null && property.items.complexType != null)
+                ? models.get(property.items.complexType)
+                : null;
+    }
+
+    private static boolean itemsIsEnum(CodegenProperty property, Map<String, CodegenModel> models) {
+        CodegenModel model = itemsModel(property, models);
+        return (property.items != null && property.items.isEnum) || (model != null && model.isEnum);
+    }
+
+    private static boolean itemsIsModel(CodegenProperty property, Map<String, CodegenModel> models) {
+        return !itemsIsEnum(property, models)
+                && ((property.items != null && property.items.isModel) || itemsModel(property, models) != null);
+    }
+
+    /** Adds the enum's permitted values to the leaf, when the generator exposes them. */
+    private static void putAllowedValues(Map<String, Object> leaf, CodegenProperty property,
+                                         Map<String, CodegenModel> models) {
+        if (!isScalarEnum(property) && !isListOfEnums(property, models)) {
+            return;
         }
-
-        Map<String, Object> leaf = new LinkedHashMap<>();
-        leaf.put("optionName", path);
-        leaf.put("path", path);
-        leaf.put("fieldName", field);
-        leaf.put("baseName", property.baseName);
-        leaf.put("required", property.required);
-        leaf.put("description", property.description == null ? "" : property.description);
-        leaf.put("isEnum", property.isEnum);
-        leaf.put("isJson", unflattenable);
-        leaf.put("isMap", flattenableMap);
-        leaf.put("dataType", cliType);
-        leaf.put("jsonType", property.dataType);
         Map<String, Object> allowableValues = property.allowableValues != null
                 ? property.allowableValues
                 : (property.items != null ? property.items.allowableValues : null);
-        if ((scalarEnum || listOfEnums) && allowableValues != null) {
-            Object values = allowableValues.get("values");
-            if (values != null) {
-                leaf.put("allowed", String.valueOf(values));
-            }
+        if (allowableValues == null) {
+            return;
         }
-        return leaf;
+        Object values = allowableValues.get(ALLOWABLE_VALUES);
+        if (values != null) {
+            leaf.put(LEAF_ALLOWED, String.valueOf(values));
+        }
     }
 
     /**

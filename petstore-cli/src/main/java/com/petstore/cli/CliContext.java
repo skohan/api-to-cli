@@ -5,7 +5,6 @@ import java.nio.file.Path;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.petstore.cli.auth.CredentialsStore;
-import com.petstore.cli.auth.CredentialsStore.HostCredentials;
 import com.petstore.cli.generated.ApiClient;
 import com.petstore.cli.generated.api.CliApi;
 import com.petstore.cli.output.OutputFormat;
@@ -13,51 +12,35 @@ import com.petstore.cli.output.OutputFormat;
 /**
  * Shared configuration + factory used by the generated command classes.
  *
- * The base URL resolves as: command-line flag &gt; {@code PETSTORE_BASE_URL} env &gt; the
- * current host in {@link CredentialsStore} (set by {@code login}) &gt; {@code http://localhost}.
- * The api key and bearer token are then looked up for that resolved host, so credentials
- * are always host-scoped -- switching hosts never uses another host's token. Subcommands
- * never read the flags directly; they call {@link #apiClient()} / {@link #api()}.
+ * The host and bearer token are captured once at {@code login} and stored in
+ * {@link CredentialsStore}; ordinary commands take neither as a flag. The base URL resolves as:
+ * {@code PETSTORE_BASE_URL} env &gt; the stored host &gt; {@code http://localhost}; the bearer
+ * token comes from the store. The api key is not stored and is read only from
+ * {@code PETSTORE_API_KEY} when an endpoint needs the {@code api_key} header.
  *
- * The output format resolves as: command-line flag &gt; {@code PETSTORE_OUTPUT} env &gt;
+ * The output format resolves as: {@code --format} flag &gt; {@code PETSTORE_OUTPUT} env &gt;
  * {@link OutputFormat#JSON}.
  */
 public final class CliContext {
 
-    private static volatile String flagBaseUrl;
-    private static volatile String flagApiKey;
     private static volatile OutputFormat flagFormat;
 
     private CliContext() {
     }
 
-    /** Records overrides supplied on the command line; blank/null values are ignored. */
-    public static void configure(String baseUrlOverride, String apiKeyOverride) {
-        configure(baseUrlOverride, apiKeyOverride, null);
-    }
-
-    /** Records overrides supplied on the command line; blank/null values are ignored. */
-    public static void configure(String baseUrlOverride, String apiKeyOverride, OutputFormat formatOverride) {
-        if (baseUrlOverride != null && !baseUrlOverride.isBlank()) {
-            flagBaseUrl = baseUrlOverride;
-        }
-        if (apiKeyOverride != null && !apiKeyOverride.isBlank()) {
-            flagApiKey = apiKeyOverride;
-        }
+    /** Records the {@code --format} override supplied on the command line; null is ignored. */
+    public static void configure(OutputFormat formatOverride) {
         if (formatOverride != null) {
             flagFormat = formatOverride;
         }
     }
 
     public static ApiClient apiClient() {
-        String host = baseUrl();
-        HostCredentials creds = CredentialsStore.get(host);
-        final String key = firstNonBlank(flagApiKey, System.getenv("PETSTORE_API_KEY"),
-                creds == null ? null : creds.apiKey);
-        final String bearer = creds == null ? null : creds.token;
+        final String key = apiKey();
+        final String bearer = CredentialsStore.token();
 
         ApiClient client = new ApiClient();
-        client.updateBaseUri(host);
+        client.updateBaseUri(baseUrl());
         client.setRequestInterceptor(builder -> {
             if (key != null && !key.isBlank()) {
                 builder.header("api_key", key);
@@ -69,10 +52,9 @@ public final class CliContext {
         return client;
     }
 
-    /** Whether the current host has a cached token; used by generated commands to gate protected calls. */
+    /** Whether a cached token is present; used by generated commands to gate protected calls. */
     public static boolean hasBearerToken() {
-        HostCredentials creds = CredentialsStore.get(baseUrl());
-        return creds != null && creds.token != null && !creds.token.isBlank();
+        return CredentialsStore.token() != null;
     }
 
     public static CliApi api() {
@@ -194,15 +176,28 @@ public final class CliContext {
         }
     }
 
+    /** The resolved base URL for ordinary commands: env &gt; stored host &gt; localhost. */
     public static String baseUrl() {
-        return firstNonBlank(flagBaseUrl, System.getenv("PETSTORE_BASE_URL"),
-                CredentialsStore.currentHost(), "http://localhost");
+        return resolveBaseUrl(null);
     }
 
+    /**
+     * The base URL with an explicit override taking top precedence -- used by {@code login},
+     * the only command that accepts {@code --base-url}. Precedence: override &gt;
+     * {@code PETSTORE_BASE_URL} &gt; stored host &gt; {@code http://localhost}.
+     */
+    public static String resolveBaseUrl(String override) {
+        return firstNonBlank(override, System.getenv("PETSTORE_BASE_URL"),
+                CredentialsStore.host(), "http://localhost");
+    }
+
+    /**
+     * The api key for the {@code api_key} header, taken from {@code PETSTORE_API_KEY}. It is not
+     * persisted -- the stored bearer token is the durable credential -- so this is an optional
+     * escape hatch for endpoints that still require the header.
+     */
     public static String apiKey() {
-        HostCredentials creds = CredentialsStore.get(baseUrl());
-        return firstNonBlank(flagApiKey, System.getenv("PETSTORE_API_KEY"),
-                creds == null ? null : creds.apiKey);
+        return firstNonBlank(System.getenv("PETSTORE_API_KEY"));
     }
 
     private static String firstNonBlank(String... values) {
