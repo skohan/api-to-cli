@@ -7,7 +7,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.petstore.cli.auth.CredentialsStore;
 import com.petstore.cli.generated.ApiClient;
 import com.petstore.cli.generated.api.CliApi;
-import com.petstore.cli.output.OutputFormat;
 
 /**
  * Shared configuration + factory used by the generated command classes.
@@ -17,22 +16,10 @@ import com.petstore.cli.output.OutputFormat;
  * {@code PETSTORE_BASE_URL} env &gt; the stored host &gt; {@code http://localhost}; the bearer
  * token comes from the store. The api key is not stored and is read only from
  * {@code PETSTORE_API_KEY} when an endpoint needs the {@code api_key} header.
- *
- * The output format resolves as: {@code --format} flag &gt; {@code PETSTORE_OUTPUT} env &gt;
- * {@link OutputFormat#JSON}.
  */
 public final class CliContext {
 
-    private static volatile OutputFormat flagFormat;
-
     private CliContext() {
-    }
-
-    /** Records the {@code --format} override supplied on the command line; null is ignored. */
-    public static void configure(OutputFormat formatOverride) {
-        if (formatOverride != null) {
-            flagFormat = formatOverride;
-        }
     }
 
     public static ApiClient apiClient() {
@@ -61,29 +48,15 @@ public final class CliContext {
         return new CliApi(apiClient());
     }
 
-    /** Renders a response in the resolved {@link #outputFormat()} (pretty JSON or a table). */
+    /** Pretty-prints a response using the client's configured Jackson mapper. */
     public static String render(Object value) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = apiClient().getObjectMapper();
-            return outputFormat().format(mapper.valueToTree(value), mapper);
+            return apiClient().getObjectMapper()
+                    .writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(value);
         } catch (Exception e) {
             return String.valueOf(value);
         }
-    }
-
-    public static OutputFormat outputFormat() {
-        if (flagFormat != null) {
-            return flagFormat;
-        }
-        String env = System.getenv("PETSTORE_OUTPUT");
-        if (env != null && !env.isBlank()) {
-            try {
-                return OutputFormat.valueOf(env.trim().toUpperCase(java.util.Locale.ROOT));
-            } catch (IllegalArgumentException ignored) {
-                // fall through to default
-            }
-        }
-        return OutputFormat.JSON;
     }
 
     /**
