@@ -41,9 +41,8 @@ import picocli.CommandLine.Spec;
         })
 public final class PetstoreCli implements Runnable {
 
-    // Host and api key are captured once at `login` (see LoginCommand) and read from the
-    // stored config or PETSTORE_BASE_URL/PETSTORE_API_KEY thereafter; they are intentionally
-    // not global flags on ordinary commands.
+    // The host is captured once at `login` (see LoginCommand) and read from the stored config
+    // or PETSTORE_BASE_URL thereafter; it is intentionally not a global flag on ordinary commands.
 
     @Spec
     private CommandSpec spec;
