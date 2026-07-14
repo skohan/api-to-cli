@@ -183,12 +183,17 @@ final class BodyFlattener {
         // A map whose values are a simple scalar (Map<String,String>, Map<String,Integer>, ...)
         // becomes a repeatable picocli key=value option rather than one opaque JSON blob.
         // Maps of models / arrays / other maps / enums stay JSON -- key=value can't express those.
+        //
+        // The map's value schema lives in `items` on some generator versions and in
+        // `additionalProperties` on others; consult whichever one this version populated.
+        CodegenProperty mapValue = mapValueSchema(property);
         boolean flattenableMap = property.isMap
-                && property.items != null
-                && !property.items.isModel
-                && !property.items.isContainer
-                && !property.items.isMap
-                && !property.items.isEnum;
+                && mapValue != null
+                && mapValue.dataType != null
+                && !mapValue.isModel
+                && !mapValue.isContainer
+                && !mapValue.isMap
+                && !mapValue.isEnum;
 
         boolean listOfModels = property.isContainer && itemsIsModel;
         boolean unflattenable = listOfModels
@@ -204,7 +209,7 @@ final class BodyFlattener {
         String cliType;
         if (flattenableMap) {
             // OpenAPI map keys are always strings; the value type drives picocli's conversion.
-            cliType = "java.util.Map<String, " + property.items.dataType + ">";
+            cliType = "java.util.Map<String, " + mapValue.dataType + ">";
         } else if (unflattenable || scalarEnum) {
             cliType = "String";
         } else if (listOfEnums) {
@@ -235,6 +240,19 @@ final class BodyFlattener {
             }
         }
         return leaf;
+    }
+
+    /**
+     * The value schema of a map property. openapi-generator has, across versions, exposed the
+     * {@code additionalProperties} value type via {@code CodegenProperty.items} and via
+     * {@code CodegenProperty.additionalProperties}; return whichever is populated so map
+     * detection does not silently regress to a JSON blob on a version that uses the other.
+     */
+    private static CodegenProperty mapValueSchema(CodegenProperty property) {
+        if (!property.isMap) {
+            return null;
+        }
+        return property.items != null ? property.items : property.getAdditionalProperties();
     }
 
     private static String capitalize(String s) {
