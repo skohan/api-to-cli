@@ -13,9 +13,8 @@ import java.util.Properties;
  * directory. It holds the host (base URL), the bearer token (the service ticket obtained at
  * {@code login}), and the username, so later commands need no flags.
  *
- * The bearer token is the only credential stored: it is what protected commands actually send.
- * The api key is not persisted -- if some endpoint needs the {@code api_key} header, it is taken
- * from {@code PETSTORE_API_KEY} at call time.
+ * The bearer token (service ticket) is the only credential: it is what protected commands send
+ * as {@code Authorization: Bearer}. There is no separate api key.
  *
  * The format is a plain {@code key=value} properties file, not JSON:
  * <pre>

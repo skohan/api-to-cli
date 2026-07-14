@@ -14,8 +14,7 @@ import com.petstore.cli.generated.api.CliApi;
  * The host and bearer token are captured once at {@code login} and stored in
  * {@link CredentialsStore}; ordinary commands take neither as a flag. The base URL resolves as:
  * {@code PETSTORE_BASE_URL} env &gt; the stored host &gt; {@code http://localhost}; the bearer
- * token comes from the store. The api key is not stored and is read only from
- * {@code PETSTORE_API_KEY} when an endpoint needs the {@code api_key} header.
+ * token (the service ticket) comes from the store and is sent as {@code Authorization: Bearer}.
  */
 public final class CliContext {
 
@@ -23,15 +22,11 @@ public final class CliContext {
     }
 
     public static ApiClient apiClient() {
-        final String key = apiKey();
         final String bearer = CredentialsStore.token();
 
         ApiClient client = new ApiClient();
         client.updateBaseUri(baseUrl());
         client.setRequestInterceptor(builder -> {
-            if (key != null && !key.isBlank()) {
-                builder.header("api_key", key);
-            }
             if (bearer != null && !bearer.isBlank()) {
                 builder.header("Authorization", "Bearer " + bearer);
             }
@@ -162,15 +157,6 @@ public final class CliContext {
     public static String resolveBaseUrl(String override) {
         return firstNonBlank(override, System.getenv("PETSTORE_BASE_URL"),
                 CredentialsStore.host(), "http://localhost");
-    }
-
-    /**
-     * The api key for the {@code api_key} header, taken from {@code PETSTORE_API_KEY}. It is not
-     * persisted -- the stored bearer token is the durable credential -- so this is an optional
-     * escape hatch for endpoints that still require the header.
-     */
-    public static String apiKey() {
-        return firstNonBlank(System.getenv("PETSTORE_API_KEY"));
     }
 
     private static String firstNonBlank(String... values) {

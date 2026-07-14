@@ -7,13 +7,13 @@ import com.petstore.cli.auth.CredentialsStore;
 import picocli.CommandLine.Command;
 
 /**
- * Prints the effective configuration: the resolved host, its stored username, whether an api
- * key and a session token are present, and the config file location. Secret values (api key,
- * token) are never printed -- only whether they are set. Hand-written, not generated.
+ * Prints the effective configuration: the resolved host, its stored username, whether a session
+ * token is present, and the config file location. The token value is never printed -- only
+ * whether it is set. Hand-written, not generated.
  */
 @Command(
         name = "whoami",
-        description = "Show the current host, stored username, and whether credentials are set.",
+        description = "Show the current host, stored username, and whether logged in.",
         mixinStandardHelpOptions = true)
 public final class WhoAmICommand implements Callable<Integer> {
 
@@ -21,7 +21,6 @@ public final class WhoAmICommand implements Callable<Integer> {
     public Integer call() {
         System.out.println("host     : " + CliContext.baseUrl());
         System.out.println("username : " + valueOrDash(CredentialsStore.username()));
-        System.out.println("api-key  : " + (CliContext.apiKey() == null ? "-" : "(set)"));
         System.out.println("token    : " + (CliContext.hasBearerToken() ? "cached" : "not logged in"));
         System.out.println("config   : " + CredentialsStore.location());
         return 0;
